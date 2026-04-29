@@ -112,8 +112,6 @@ def tenant_collection(request):
             client_id=data.get("clientId", "").strip(),
             certificate_thumbprint=data.get("certificateThumbprint", "").strip(),
             key_vault_certificate_uri=data.get("keyVaultCertificateUri", "").strip(),
-            exchange_organization=data.get("exchangeOrganization", "").strip(),
-            sharepoint_admin_url=data.get("sharePointAdminUrl", "").strip(),
         )
         record_audit_event(
             request=request,
@@ -153,8 +151,6 @@ def tenant_detail(request, tenant_id):
             "clientId": "client_id",
             "certificateThumbprint": "certificate_thumbprint",
             "keyVaultCertificateUri": "key_vault_certificate_uri",
-            "exchangeOrganization": "exchange_organization",
-            "sharePointAdminUrl": "sharepoint_admin_url",
         }
         for api_name, model_name in field_map.items():
             if api_name in data:

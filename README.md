@@ -51,7 +51,7 @@ The backend persists:
 - Report artifacts
 - Immutable audit events
 
-Tenant profiles contain metadata required to run assessments, including tenant ID, app client ID, certificate thumbprint, Key Vault certificate URI, Exchange organization, and SharePoint admin URL.
+Tenant profiles contain metadata required to run assessments, including tenant ID, app client ID, certificate thumbprint, and Key Vault certificate URI.
 
 ## Authorization
 
@@ -67,7 +67,7 @@ Role capabilities are defined in `backend/assessments/roles.py`. Superusers are 
 
 ## Assessment Permissions
 
-Every assessment connects to Microsoft Graph, Exchange Online, Security & Compliance PowerShell, and SharePoint Online. Tenant profiles must include the Exchange organization and SharePoint admin URL required by those connectors.
+Every assessment connects to Microsoft Graph, Exchange Online, Security & Compliance PowerShell, and SharePoint Online. The runner derives the Exchange organization and SharePoint admin URL from the tenant's initial `onmicrosoft.com` domain after connecting to Microsoft Graph.
 
 When the underlying Zero Trust Assessment module connects through Microsoft Graph PowerShell, the Graph PowerShell app requests consent for the permissions required by the assessment. The consent prompt is displayed only if the Graph PowerShell app does not already have the required permissions.
 

@@ -88,6 +88,34 @@ function Get-ZtCertificateFromKeyVault {
     return ConvertTo-ZtCertificate -PfxBase64 $secret.value
 }
 
+function Get-ZtInitialTenantDomain {
+    $organization = Get-MgOrganization -Property VerifiedDomains | Select-Object -First 1
+    if (-not $organization) {
+        throw 'Unable to resolve tenant organization from Microsoft Graph.'
+    }
+
+    $initialDomain = @($organization.VerifiedDomains) | Where-Object { $_.IsInitial } | Select-Object -First 1
+    if (-not $initialDomain -or -not $initialDomain.Name) {
+        throw 'Unable to resolve the tenant initial domain from Microsoft Graph verified domains.'
+    }
+
+    return $initialDomain.Name.ToLowerInvariant()
+}
+
+function ConvertTo-ZtSharePointAdminUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $InitialDomain
+    )
+
+    if ($InitialDomain -notmatch '\.onmicrosoft\.com$') {
+        throw "Cannot derive the SharePoint admin URL from initial domain '$InitialDomain'. Expected an onmicrosoft.com domain."
+    }
+
+    $tenantName = $InitialDomain -replace '\.onmicrosoft\.com$', ''
+    return "https://$tenantName-admin.sharepoint.com"
+}
+
 $modulePath = $env:ZTA_MODULE_PATH
 if (-not $modulePath) {
     throw 'ZTA_MODULE_PATH is required.'
@@ -102,17 +130,13 @@ Import-Module (Join-Path $modulePath 'ZeroTrustAssessment.psd1') -Force
 
 $certificate = Get-ZtCertificateFromKeyVault -CertificateUri $certificateUri
 
-if (-not $env:ZTA_EXCHANGE_ORGANIZATION) {
-    throw 'ZTA_EXCHANGE_ORGANIZATION is required because ExchangeOnline runs with every assessment.'
-}
-
-if (-not $env:ZTA_SHAREPOINT_ADMIN_URL) {
-    throw 'ZTA_SHAREPOINT_ADMIN_URL is required because SharePointOnline runs with every assessment.'
-}
-
 Connect-MgGraph -ClientId $clientId -TenantId $tenantId -Certificate $certificate -NoWelcome
-Connect-ExchangeOnline -AppID $clientId -Organization $env:ZTA_EXCHANGE_ORGANIZATION -Certificate $certificate -ShowBanner:$false
-Connect-IPPSSession -AppID $clientId -Organization $env:ZTA_EXCHANGE_ORGANIZATION -Certificate $certificate
-Connect-SPOService -Url $env:ZTA_SHAREPOINT_ADMIN_URL -ClientId $clientId -TenantId $tenantId -Certificate $certificate
+
+$initialDomain = Get-ZtInitialTenantDomain
+$sharePointAdminUrl = ConvertTo-ZtSharePointAdminUrl -InitialDomain $initialDomain
+
+Connect-ExchangeOnline -AppID $clientId -Organization $initialDomain -Certificate $certificate -ShowBanner:$false
+Connect-IPPSSession -AppID $clientId -Organization $initialDomain -Certificate $certificate
+Connect-SPOService -Url $sharePointAdminUrl -ClientId $clientId -TenantId $tenantId -Certificate $certificate
 
 Invoke-ZtAssessment -Path $outputPath -Pillar $pillar -DisableTelemetry

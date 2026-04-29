@@ -5,8 +5,6 @@ def tenant_to_dict(tenant, include_key_vault_certificate_uri=False):
         "tenantId": tenant.tenant_id,
         "clientId": tenant.client_id,
         "certificateThumbprint": tenant.certificate_thumbprint,
-        "exchangeOrganization": tenant.exchange_organization,
-        "sharePointAdminUrl": tenant.sharepoint_admin_url,
         "createdAt": tenant.created_at.isoformat(),
         "updatedAt": tenant.updated_at.isoformat(),
     }

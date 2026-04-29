@@ -29,8 +29,6 @@ def tenant_audit_snapshot(tenant):
         "clientId": tenant.client_id,
         "certificateThumbprint": tenant.certificate_thumbprint,
         "keyVaultCertificateUri": tenant.key_vault_certificate_uri,
-        "exchangeOrganization": tenant.exchange_organization,
-        "sharePointAdminUrl": tenant.sharepoint_admin_url,
     }
 
 

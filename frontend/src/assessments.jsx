@@ -7,9 +7,7 @@ const emptyTenant = {
   tenantId: "",
   clientId: "",
   certificateThumbprint: "",
-  keyVaultCertificateUri: "",
-  exchangeOrganization: "",
-  sharePointAdminUrl: ""
+  keyVaultCertificateUri: ""
 };
 
 function getCookie(name) {
@@ -125,9 +123,7 @@ function App() {
         tenantId: tenant.tenantId || "",
         clientId: tenant.clientId || "",
         certificateThumbprint: tenant.certificateThumbprint || "",
-        keyVaultCertificateUri: tenant.keyVaultCertificateUri || "",
-        exchangeOrganization: tenant.exchangeOrganization || "",
-        sharePointAdminUrl: tenant.sharePointAdminUrl || ""
+        keyVaultCertificateUri: tenant.keyVaultCertificateUri || ""
       });
       api(`/runs/?tenantProfileId=${tenant.id}`)
         .then((data) => setRuns(data.runs))
@@ -307,8 +303,6 @@ function App() {
                 {canConfigureKeyVaultCertificates ? (
                   <Field label="Key Vault Certificate URI" value={form.keyVaultCertificateUri} onChange={(value) => updateField("keyVaultCertificateUri", value)} wide />
                 ) : null}
-                <Field label="Exchange Organization" value={form.exchangeOrganization} onChange={(value) => updateField("exchangeOrganization", value)} disabled={!canManageTenants} />
-                <Field label="SharePoint Admin URL" value={form.sharePointAdminUrl} onChange={(value) => updateField("sharePointAdminUrl", value)} disabled={!canManageTenants} />
                 <div className="actions form-actions">
                   {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
                   {canManageTenants ? <button className="button" type="button">Create Certificate</button> : null}

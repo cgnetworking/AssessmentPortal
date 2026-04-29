@@ -86,8 +86,6 @@ class PowerShellAssessmentRunner:
                 "ZTA_CLIENT_ID": tenant.client_id,
                 "ZTA_KEY_VAULT_CERTIFICATE_URI": tenant.key_vault_certificate_uri,
                 "ZTA_CERTIFICATE_THUMBPRINT": tenant.certificate_thumbprint,
-                "ZTA_EXCHANGE_ORGANIZATION": tenant.exchange_organization,
-                "ZTA_SHAREPOINT_ADMIN_URL": tenant.sharepoint_admin_url,
                 "ZTA_MODULE_PATH": str(settings.ZTA_MODULE_PATH),
                 "ZTA_OUTPUT_PATH": str(output_dir),
                 "ZTA_PILLAR": run.pillar,
