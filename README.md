@@ -5,7 +5,6 @@
 - `backend/`: Django app and JSON API.
 - `frontend/`: React/Vite frontend.
 - `modules/ZeroTrustAssessment/`: forked Microsoft Zero Trust Assessment PowerShell module.
-- `assessments-layout.html` and `assessments-layout.css`: static layout reference files.
 
 ## Assessment Runtime Requirements
 
