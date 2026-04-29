@@ -10,12 +10,11 @@
 
 - The application and assessment worker will run only on Ubuntu 24.04 or newer.
 - The portal will run the Microsoft Zero Trust Assessment PowerShell module through a backend worker.
-- DuckDB must not be installed or used anywhere in the runtime path.
 - The forked module lives under `modules/ZeroTrustAssessment`.
-- The forked module must not bundle or load DuckDB native libraries or require the Microsoft Visual C++ Redistributable.
 - The forked module uses PostgreSQL through the Ubuntu `psql` client and standard PostgreSQL environment variables.
 - Assessment results must be persisted to Azure Database for PostgreSQL.
 - The portal and worker will connect to Azure resources using managed identity.
+- The assessment worker expects `pwsh`, `psql`, the required Microsoft PowerShell service modules, and managed identity access to Key Vault and Azure Database for PostgreSQL.
 
 ## PostgreSQL Runtime
 
@@ -25,11 +24,11 @@ The worker must provide PostgreSQL connectivity before invoking the module:
 - `ZT_POSTGRES_SCHEMA` may be set to isolate an assessment run; otherwise the module uses the `main` schema.
 - For Azure Database for PostgreSQL with managed identity, the worker is responsible for acquiring the Entra access token and passing it as the PostgreSQL password.
 
-## Django Backend
+## Production Django Backend
 
 The backend stores tenant profiles, assessment runs, run logs, results, and report artifacts in PostgreSQL.
 
-Required environment variables:
+Required production environment variables:
 
 - `POSTGRES_HOST`
 - `POSTGRES_DB`
@@ -40,13 +39,13 @@ Required environment variables:
 - `AZUREAD_AUTH_CLIENT_ID`
 - `AZUREAD_AUTH_CLIENT_SECRET`
 - `AZUREAD_AUTH_TENANT_ID`
-- `FRONTEND_URL`, defaults to `http://127.0.0.1:5173`
-- `CSRF_TRUSTED_ORIGINS`, defaults to `http://127.0.0.1:5173,http://localhost:5173`
+- `FRONTEND_URL`, set to the public portal origin, such as `https://<host>`
+- `CSRF_TRUSTED_ORIGINS`, set to the public portal origin, such as `https://<host>`
 
-The Microsoft Entra app registration redirect URI must point to the Django social-auth callback:
+The Microsoft Entra app registration redirect URI must be:
 
 ```text
-https://<backend-host>/auth/complete/azuread-tenant-oauth2/
+https://<host>/auth/complete/azuread-tenant-oauth2/
 ```
 
 ## Application Roles
@@ -64,45 +63,6 @@ Role permissions:
 - `Reader`: view tenant profiles, run history, logs, and reports only.
 
 The groups are created by Django migration. Assign users through Django admin after they first sign in and their user record exists.
-
-Run locally after installing dependencies:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cd backend
-python manage.py migrate
-python manage.py runserver
-```
-
-Run a queued assessment:
-
-```bash
-cd backend
-python manage.py run_assessment <assessment-run-id>
-```
-
-Run the worker loop:
-
-```bash
-cd backend
-python manage.py run_queued_assessments
-```
-
-The assessment worker expects `pwsh`, `psql`, the required Microsoft PowerShell service modules, and managed identity access to Key Vault and Azure Database for PostgreSQL.
-
-## React Frontend
-
-Run the frontend in a separate shell:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Vite proxies `/api` requests to `http://127.0.0.1:8000`.
 
 ## Production Runtime
 
