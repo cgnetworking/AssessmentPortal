@@ -146,7 +146,7 @@ Tenant assessment connections must use app-only certificate authentication only.
 
 - Certificate private keys must be stored in Azure Key Vault.
 - PostgreSQL must store certificate metadata only, such as tenant ID, client ID, thumbprint, and Key Vault certificate/secret URI.
-- The worker must retrieve certificate material from Key Vault at run time using managed identity.
+- The PowerShell runner must retrieve certificate material from Key Vault at run time using managed identity. Django passes only the Key Vault certificate/secret URI to the runner, not the PFX/private key material.
 - The preferred connector pattern is an in-memory `X509Certificate2` object passed with `-Certificate`.
 - Do not add password, delegated user, interactive browser, device code, client secret, or locally installed certificate-store auth paths.
 - Use certificate file paths or thumbprint auth only if a connector does not support in-memory certificate objects and the fallback is explicitly approved.

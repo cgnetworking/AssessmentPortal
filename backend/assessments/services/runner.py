@@ -7,13 +7,9 @@ from django.conf import settings
 from django.utils import timezone
 
 from assessments.models import AssessmentRun, ReportArtifact, RunLog
-from assessments.services.key_vault import KeyVaultCertificateProvider
 
 
 class PowerShellAssessmentRunner:
-    def __init__(self, certificate_provider=None):
-        self.certificate_provider = certificate_provider or KeyVaultCertificateProvider()
-
     def run(self, run: AssessmentRun) -> AssessmentRun:
         tenant = run.tenant_profile
         output_dir = Path(settings.ZTA_OUTPUT_ROOT) / str(run.id)
@@ -25,8 +21,7 @@ class PowerShellAssessmentRunner:
         run.save(update_fields=["status", "started_at", "output_path", "updated_at"])
 
         try:
-            pfx_base64 = self.certificate_provider.get_pfx_base64(tenant.key_vault_certificate_uri)
-            env = self._build_environment(run, pfx_base64, output_dir)
+            env = self._build_environment(run, output_dir)
             process = subprocess.Popen(
                 [
                     "pwsh",
@@ -69,7 +64,7 @@ class PowerShellAssessmentRunner:
             RunLog.objects.create(run=run, stream="stderr", message=str(exc))
             return run
 
-    def _build_environment(self, run, pfx_base64, output_dir):
+    def _build_environment(self, run, output_dir):
         tenant = run.tenant_profile
         env = os.environ.copy()
         env.update(
@@ -77,7 +72,7 @@ class PowerShellAssessmentRunner:
                 "ZTA_RUN_ID": str(run.id),
                 "ZTA_TENANT_ID": tenant.tenant_id,
                 "ZTA_CLIENT_ID": tenant.client_id,
-                "ZTA_CERTIFICATE_PFX_BASE64": pfx_base64,
+                "ZTA_KEY_VAULT_CERTIFICATE_URI": tenant.key_vault_certificate_uri,
                 "ZTA_CERTIFICATE_THUMBPRINT": tenant.certificate_thumbprint,
                 "ZTA_EXCHANGE_ORGANIZATION": tenant.exchange_organization,
                 "ZTA_SHAREPOINT_ADMIN_URL": tenant.sharepoint_admin_url,

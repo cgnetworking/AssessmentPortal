@@ -67,6 +67,8 @@ The Microsoft Entra app registration redirect URI must be:
 https://<host>/auth/complete/azuread-tenant-oauth2/
 ```
 
+The assessment runner retrieves tenant certificate material directly from Key Vault with managed identity. Set `AZURE_CLIENT_ID` in `/etc/assessmentportal/assessmentportal.env` only when using a user-assigned managed identity; leave it empty for a system-assigned identity.
+
 ## Gunicorn and Worker
 
 ```bash
