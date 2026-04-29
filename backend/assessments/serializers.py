@@ -1,17 +1,19 @@
-def tenant_to_dict(tenant):
-    return {
+def tenant_to_dict(tenant, include_key_vault_certificate_uri=False):
+    data = {
         "id": str(tenant.id),
         "displayName": tenant.display_name,
         "tenantId": tenant.tenant_id,
         "clientId": tenant.client_id,
         "certificateThumbprint": tenant.certificate_thumbprint,
-        "keyVaultCertificateUri": tenant.key_vault_certificate_uri,
         "exchangeOrganization": tenant.exchange_organization,
         "sharePointAdminUrl": tenant.sharepoint_admin_url,
         "enabledConnectors": tenant.enabled_connectors,
         "createdAt": tenant.created_at.isoformat(),
         "updatedAt": tenant.updated_at.isoformat(),
     }
+    if include_key_vault_certificate_uri:
+        data["keyVaultCertificateUri"] = tenant.key_vault_certificate_uri
+    return data
 
 
 def run_to_dict(run):

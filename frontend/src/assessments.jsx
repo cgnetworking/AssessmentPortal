@@ -70,6 +70,7 @@ function App() {
   );
   const permissions = auth.user?.permissions || [];
   const canManageTenants = permissions.includes("manageTenantProfiles");
+  const canConfigureKeyVaultCertificates = permissions.includes("configureKeyVaultCertificates");
   const canDeleteTenants = permissions.includes("deleteTenants");
   const canRunAssessments = permissions.includes("runAssessments");
   const canViewTenants = permissions.includes("viewTenantProfiles") || canManageTenants;
@@ -305,7 +306,9 @@ function App() {
                 <Field label="Tenant ID" value={form.tenantId} onChange={(value) => updateField("tenantId", value)} disabled={!canManageTenants} />
                 <Field label="Client ID" value={form.clientId} onChange={(value) => updateField("clientId", value)} disabled={!canManageTenants} />
                 <Field label="Certificate Thumbprint" value={form.certificateThumbprint} onChange={(value) => updateField("certificateThumbprint", value)} disabled={!canManageTenants} />
-                <Field label="Key Vault Certificate URI" value={form.keyVaultCertificateUri} onChange={(value) => updateField("keyVaultCertificateUri", value)} disabled={!canManageTenants} wide />
+                {canConfigureKeyVaultCertificates ? (
+                  <Field label="Key Vault Certificate URI" value={form.keyVaultCertificateUri} onChange={(value) => updateField("keyVaultCertificateUri", value)} wide />
+                ) : null}
                 <Field label="Exchange Organization" value={form.exchangeOrganization} onChange={(value) => updateField("exchangeOrganization", value)} disabled={!canManageTenants} />
                 <Field label="SharePoint Admin URL" value={form.sharePointAdminUrl} onChange={(value) => updateField("sharePointAdminUrl", value)} disabled={!canManageTenants} />
                 <ConnectorControls value={form.enabledConnectors} onChange={(value) => updateField("enabledConnectors", value)} disabled={!canManageTenants} />

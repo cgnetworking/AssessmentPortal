@@ -11,8 +11,8 @@ function Connect-Database {
 
 		Set standard PG* environment variables before calling this command. The
 		assessment portal supports Azure Database for PostgreSQL with managed
-		identity only; the worker must provide the Entra access token through
-		PGPASSWORD.
+		identity only; Invoke-DatabaseQuery acquires the Entra access token and
+		exposes it as PGPASSWORD only while launching psql.
 	#>
 	[CmdletBinding()]
 	param (
@@ -33,7 +33,7 @@ function Connect-Database {
 	)
 
 	if ($ConnectionString -or $env:DATABASE_URL) {
-		throw 'Connection strings are not supported. Use PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT, and PGSSLMODE supplied by the managed-identity worker.'
+		throw 'Connection strings are not supported. Use PGHOST, PGDATABASE, PGUSER, PGPORT, and PGSSLMODE supplied by the managed-identity worker.'
 	}
 
 	Write-PSFMessage -Level System -Message 'Establishing a PostgreSQL assessment database handle for schema {0}' -StringValues $Schema -Tag DB

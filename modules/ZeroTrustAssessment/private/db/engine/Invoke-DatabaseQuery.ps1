@@ -1,3 +1,80 @@
+$script:ZtPostgresAccessToken = $null
+$script:ZtPostgresAccessTokenExpiresAtUtc = [DateTime]::MinValue
+
+function ConvertTo-ZtManagedIdentityExpiresOnUtc {
+	[CmdletBinding()]
+	param (
+		$ExpiresOn
+	)
+
+	if (-not $ExpiresOn) {
+		return [DateTime]::UtcNow.AddMinutes(55)
+	}
+
+	$expiresOnText = [string]$ExpiresOn
+	$unixSeconds = 0L
+	if ([long]::TryParse($expiresOnText, [ref]$unixSeconds)) {
+		return [DateTimeOffset]::FromUnixTimeSeconds($unixSeconds).UtcDateTime
+	}
+
+	$parsed = [DateTimeOffset]::MinValue
+	if ([DateTimeOffset]::TryParse($expiresOnText, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsed)) {
+		return $parsed.UtcDateTime
+	}
+
+	return [DateTime]::UtcNow.AddMinutes(55)
+}
+
+function Get-ZtPostgresManagedIdentityTokenResponse {
+	[CmdletBinding()]
+	param (
+		[Parameter(Mandatory = $true)]
+		[string]
+		$Resource
+	)
+
+	$encodedResource = [uri]::EscapeDataString($Resource)
+	$clientId = if ($env:AZURE_CLIENT_ID) { $env:AZURE_CLIENT_ID } else { $env:AZURE_MANAGED_IDENTITY_CLIENT_ID }
+
+	if ($env:IDENTITY_ENDPOINT -and $env:IDENTITY_HEADER) {
+		$uri = "$($env:IDENTITY_ENDPOINT)?api-version=2019-08-01&resource=$encodedResource"
+		if ($clientId) {
+			$uri = "$uri&client_id=$([uri]::EscapeDataString($clientId))"
+		}
+
+		return Invoke-RestMethod -Method GET -Uri $uri -Headers @{
+			'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER
+		} -TimeoutSec 10
+	}
+
+	$uri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$encodedResource"
+	if ($clientId) {
+		$uri = "$uri&client_id=$([uri]::EscapeDataString($clientId))"
+	}
+
+	Invoke-RestMethod -Method GET -Uri $uri -Headers @{ Metadata = 'true' } -TimeoutSec 10
+}
+
+function Get-ZtPostgresAccessToken {
+	[CmdletBinding()]
+	param()
+
+	$refreshAtUtc = [DateTime]::UtcNow.AddMinutes(5)
+	if ($script:ZtPostgresAccessToken -and $script:ZtPostgresAccessTokenExpiresAtUtc -gt $refreshAtUtc) {
+		return $script:ZtPostgresAccessToken
+	}
+
+	$resource = if ($env:ZT_POSTGRES_TOKEN_RESOURCE) { $env:ZT_POSTGRES_TOKEN_RESOURCE } else { 'https://ossrdbms-aad.database.windows.net' }
+	$response = Get-ZtPostgresManagedIdentityTokenResponse -Resource $resource
+	if (-not $response.access_token) {
+		throw 'Managed identity token response did not include an access token for PostgreSQL.'
+	}
+
+	$script:ZtPostgresAccessToken = $response.access_token
+	$script:ZtPostgresAccessTokenExpiresAtUtc = ConvertTo-ZtManagedIdentityExpiresOnUtc -ExpiresOn $response.expires_on
+	$script:ZtPostgresAccessToken
+}
+
 function Invoke-DatabaseQuery {
 	<#
 	.SYNOPSIS
@@ -39,8 +116,22 @@ function Invoke-DatabaseQuery {
 		}
 		$args += @('-c', $CommandText)
 
-		$output = & psql @args 2>&1
-		if ($LASTEXITCODE -ne 0) {
+		$previousPassword = [Environment]::GetEnvironmentVariable('PGPASSWORD', 'Process')
+		try {
+			$env:PGPASSWORD = Get-ZtPostgresAccessToken
+			$output = & psql @args 2>&1
+			$exitCode = $LASTEXITCODE
+		}
+		finally {
+			if ($null -eq $previousPassword) {
+				Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+			}
+			else {
+				$env:PGPASSWORD = $previousPassword
+			}
+		}
+
+		if ($exitCode -ne 0) {
 			$message = ($output | Out-String).Trim()
 			throw "PostgreSQL query failed: $message`nSQL: $CommandText"
 		}

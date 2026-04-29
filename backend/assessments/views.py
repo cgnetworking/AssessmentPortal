@@ -84,15 +84,28 @@ def dashboard_summary(_request):
 @require_auth
 def tenant_collection(request):
     permissions = user_permissions(request.user)
+    include_key_vault_certificate_uri = "configureKeyVaultCertificates" in permissions
     if request.method == "GET":
         if "viewTenantProfiles" not in permissions and "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "viewTenantProfiles"}, status=403)
-        return JsonResponse({"tenants": [tenant_to_dict(tenant) for tenant in TenantProfile.objects.all()]})
+        return JsonResponse(
+            {
+                "tenants": [
+                    tenant_to_dict(
+                        tenant,
+                        include_key_vault_certificate_uri=include_key_vault_certificate_uri,
+                    )
+                    for tenant in TenantProfile.objects.all()
+                ]
+            }
+        )
 
     if request.method == "POST":
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
         data = parse_json(request)
+        if data.get("keyVaultCertificateUri") and not include_key_vault_certificate_uri:
+            return JsonResponse({"detail": "Forbidden", "requiredPermission": "configureKeyVaultCertificates"}, status=403)
         tenant = TenantProfile.objects.create(
             display_name=data.get("displayName", "").strip(),
             tenant_id=data.get("tenantId", "").strip(),
@@ -109,7 +122,10 @@ def tenant_collection(request):
             target=tenant,
             metadata={"tenant": tenant_audit_snapshot(tenant)},
         )
-        return JsonResponse({"tenant": tenant_to_dict(tenant)}, status=201)
+        return JsonResponse(
+            {"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=include_key_vault_certificate_uri)},
+            status=201,
+        )
 
     return HttpResponseNotAllowed(["GET", "POST"])
 
@@ -118,16 +134,19 @@ def tenant_collection(request):
 def tenant_detail(request, tenant_id):
     tenant = get_object_or_404(TenantProfile, id=tenant_id)
     permissions = user_permissions(request.user)
+    include_key_vault_certificate_uri = "configureKeyVaultCertificates" in permissions
 
     if request.method == "GET":
         if "viewTenantProfiles" not in permissions and "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "viewTenantProfiles"}, status=403)
-        return JsonResponse({"tenant": tenant_to_dict(tenant)})
+        return JsonResponse({"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=include_key_vault_certificate_uri)})
 
     if request.method in {"PUT", "PATCH"}:
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
         data = parse_json(request)
+        if "keyVaultCertificateUri" in data and not include_key_vault_certificate_uri:
+            return JsonResponse({"detail": "Forbidden", "requiredPermission": "configureKeyVaultCertificates"}, status=403)
         before = tenant_audit_snapshot(tenant)
         field_map = {
             "displayName": "display_name",
@@ -150,7 +169,7 @@ def tenant_detail(request, tenant_id):
             target=tenant,
             metadata={"changes": audit_metadata_diff(before, after)},
         )
-        return JsonResponse({"tenant": tenant_to_dict(tenant)})
+        return JsonResponse({"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=include_key_vault_certificate_uri)})
 
     if request.method == "DELETE":
         if "deleteTenants" not in permissions:

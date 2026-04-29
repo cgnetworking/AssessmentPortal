@@ -18,11 +18,11 @@
 
 ## PostgreSQL Runtime
 
-The worker provides PostgreSQL connectivity before invoking the module:
+The worker provides PostgreSQL connection metadata before invoking the module:
 
-- `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGPORT`, and `PGSSLMODE`.
+- `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPORT`, and `PGSSLMODE`.
 - `ZT_POSTGRES_SCHEMA` may be set to isolate an assessment run; otherwise the module uses the `main` schema.
-- The portal supports Azure Database for PostgreSQL with managed identity only. The worker acquires an Entra access token and passes it as `PGPASSWORD`.
+- The portal supports Azure Database for PostgreSQL with managed identity only. The PowerShell database engine acquires an Entra access token and exposes it as `PGPASSWORD` only while launching `psql`.
 
 ## Production Django Backend
 

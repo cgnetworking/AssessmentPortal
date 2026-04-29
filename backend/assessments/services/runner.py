@@ -6,7 +6,6 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-from assessment_portal.azure_postgres import get_postgres_access_token
 from assessments.models import AssessmentRun, ReportArtifact, RunLog
 
 
@@ -69,6 +68,7 @@ class PowerShellAssessmentRunner:
         tenant = run.tenant_profile
         env = os.environ.copy()
         env.pop("DATABASE_URL", None)
+        env.pop("PGPASSWORD", None)
         env.pop("POSTGRES_PASSWORD", None)
         env.pop("ZT_POSTGRES_CONNECTION_STRING", None)
         env.update(
@@ -76,9 +76,12 @@ class PowerShellAssessmentRunner:
                 "PGHOST": settings.POSTGRES_HOST,
                 "PGDATABASE": settings.POSTGRES_DB,
                 "PGUSER": settings.POSTGRES_USER,
-                "PGPASSWORD": get_postgres_access_token(),
                 "PGPORT": settings.POSTGRES_PORT,
                 "PGSSLMODE": settings.POSTGRES_SSLMODE,
+                "ZT_POSTGRES_TOKEN_RESOURCE": os.environ.get(
+                    "AZURE_POSTGRES_TOKEN_RESOURCE",
+                    "https://ossrdbms-aad.database.windows.net",
+                ),
                 "ZTA_RUN_ID": str(run.id),
                 "ZTA_TENANT_ID": tenant.tenant_id,
                 "ZTA_CLIENT_ID": tenant.client_id,
