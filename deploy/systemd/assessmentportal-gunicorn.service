@@ -1,0 +1,23 @@
+[Unit]
+Description=Assessment Portal Gunicorn
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=assessmentportal
+Group=www-data
+WorkingDirectory=/opt/assessmentportal/backend
+EnvironmentFile=/etc/assessmentportal/assessmentportal.env
+RuntimeDirectory=assessmentportal
+RuntimeDirectoryMode=0755
+ExecStart=/opt/assessmentportal/.venv/bin/gunicorn assessment_portal.wsgi:application --config /opt/assessmentportal/deploy/gunicorn/assessment_portal.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/assessmentportal /run/assessmentportal /opt/assessmentportal/backend/staticfiles
+
+[Install]
+WantedBy=multi-user.target

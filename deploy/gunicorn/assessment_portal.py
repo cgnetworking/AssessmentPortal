@@ -1,0 +1,9 @@
+bind = "unix:/run/assessmentportal/gunicorn.sock"
+workers = 3
+worker_class = "sync"
+timeout = 120
+graceful_timeout = 30
+keepalive = 5
+accesslog = "-"
+errorlog = "-"
+capture_output = True
