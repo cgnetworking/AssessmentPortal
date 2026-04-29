@@ -7,9 +7,9 @@ This guide covers the actions an operator must perform to deploy AssessmentPorta
 Create or identify these Azure resources before running the app:
 
 - Azure Database for PostgreSQL with Microsoft Entra authentication enabled.
-- A PostgreSQL database role mapped to the portal managed identity.
-- Azure Key Vault containing the certificate secrets used for tenant assessments.
-- A managed identity with access to Azure Database for PostgreSQL and the required Key Vault certificate secrets.
+- A PostgreSQL database role mapped to the portal host's system-assigned managed identity.
+- Azure Key Vault containing the certificate objects used for tenant assessments.
+- The portal host's system-assigned managed identity with access to Azure Database for PostgreSQL and the required Key Vault certificate objects and backing certificate secrets.
 - A Microsoft Entra app registration for portal login.
 
 Configure the Microsoft Entra app registration redirect URI:
@@ -18,7 +18,7 @@ Configure the Microsoft Entra app registration redirect URI:
 https://<host>/auth/complete/azuread-tenant-oauth2/
 ```
 
-If you use a user-assigned managed identity, note its client ID. If you use a system-assigned managed identity, leave `AZURE_CLIENT_ID` empty in the app environment file.
+The portal backend, database token flow, and Key Vault certificate actions use the host's system-assigned managed identity.
 
 ## 2. Prepare The Host
 
@@ -72,7 +72,7 @@ Set these values:
 - `AZUREAD_AUTH_CLIENT_ID`
 - `AZUREAD_AUTH_CLIENT_SECRET`
 - `AZUREAD_AUTH_TENANT_ID`
-- `AZURE_CLIENT_ID`, only for user-assigned managed identity
+- `AZURE_CLIENT_ID`, only if the assessment runner needs it for app-only assessment authentication
 
 Do not configure these values:
 
@@ -135,6 +135,10 @@ Certificate private keys must remain in Azure Key Vault. Store only certificate 
 - Tenant ID
 - Client ID
 - Certificate thumbprint
-- Key Vault certificate or secret URI
+- Key Vault certificate URI
+
+To create certificates from the portal UI, set `ZTA_KEY_VAULT_URL` to the target vault URL, such as `https://example.vault.azure.net`. The Linux server uses its system-assigned managed identity to create a self-signed PFX certificate, imports it as an exportable Key Vault certificate object, and saves the resulting certificate URI and thumbprint on the tenant profile. The managed identity needs `certificates/import` and `certificates/get` for the portal action, and `secrets/get` for the assessment runner to load the certificate object's backing PFX secret at runtime.
+
+The public `.cer` download contains only the public certificate. Upload that `.cer` to the Microsoft Entra app registration identified by the tenant profile Client ID before running assessments with the new certificate.
 
 Do not use password, delegated user, interactive browser, device code, client secret, or locally installed certificate-store authentication paths for tenant assessments.

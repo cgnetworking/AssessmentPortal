@@ -24,9 +24,6 @@ def validate_remote_postgres_host(host):
 
 @lru_cache(maxsize=1)
 def get_managed_identity_credential():
-    client_id = os.environ.get("AZURE_CLIENT_ID") or os.environ.get("AZURE_MANAGED_IDENTITY_CLIENT_ID")
-    if client_id:
-        return ManagedIdentityCredential(client_id=client_id)
     return ManagedIdentityCredential()
 
 

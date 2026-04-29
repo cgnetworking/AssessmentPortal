@@ -60,6 +60,7 @@ function App() {
   const [runs, setRuns] = useState([]);
   const [selectedRun, setSelectedRun] = useState(null);
   const [error, setError] = useState("");
+  const [certificateBusy, setCertificateBusy] = useState("");
 
   const selectedTenant = useMemo(
     () => tenants.find((tenant) => tenant.id === selectedTenantId) || null,
@@ -164,6 +165,78 @@ function App() {
     setRuns((items) => [data.run, ...items]);
     setSelectedRun(data.run);
     await refresh();
+  }
+
+  async function createCertificate() {
+    if (!selectedTenant || !canManageTenants || !canConfigureKeyVaultCertificates) return;
+    setError("");
+    setCertificateBusy("create");
+    try {
+      const data = await api(`/tenants/${selectedTenant.id}/certificate/`, { method: "POST", body: "{}" });
+      setTenants((items) => items.map((item) => (item.id === data.tenant.id ? data.tenant : item)));
+      setForm({
+        displayName: data.tenant.displayName || "",
+        tenantId: data.tenant.tenantId || "",
+        clientId: data.tenant.clientId || "",
+        certificateThumbprint: data.tenant.certificateThumbprint || "",
+        keyVaultCertificateUri: data.tenant.keyVaultCertificateUri || ""
+      });
+      await refresh();
+    } catch (err) {
+      setError(err.payload?.detail || err.message);
+    } finally {
+      setCertificateBusy("");
+    }
+  }
+
+  async function downloadCertificate() {
+    if (!selectedTenant || !canManageTenants || !canConfigureKeyVaultCertificates) return;
+    setError("");
+    setCertificateBusy("download");
+    try {
+      const response = await fetch(`/api/tenants/${selectedTenant.id}/certificate/download/`, {
+        credentials: "include"
+      });
+      if (!response.ok) {
+        let payload = {};
+        try {
+          payload = await response.json();
+        } catch {
+          payload = {};
+        }
+        throw new Error(payload.detail || `Certificate download failed: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${selectedTenant.displayName || selectedTenant.tenantId}.cer`.replace(/[\\/]/g, "-");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCertificateBusy("");
+    }
+  }
+
+  async function deleteTenant() {
+    if (!selectedTenant || !canDeleteTenants) return;
+    setError("");
+    try {
+      await api(`/tenants/${selectedTenant.id}/`, { method: "DELETE" });
+      const remainingTenants = tenants.filter((tenant) => tenant.id !== selectedTenant.id);
+      setTenants(remainingTenants);
+      setSelectedTenantId(remainingTenants[0]?.id || null);
+      setForm(emptyTenant);
+      setRuns([]);
+      setSelectedRun(null);
+      await refresh();
+    } catch (err) {
+      setError(err.payload?.detail || err.message);
+    }
   }
 
   async function loadRun(run) {
@@ -305,10 +378,18 @@ function App() {
                 ) : null}
                 <div className="actions form-actions">
                   {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
-                  {canManageTenants ? <button className="button" type="button">Create Certificate</button> : null}
-                  {canManageTenants ? <button className="button" type="button">Download .cer</button> : null}
+                  {canManageTenants && canConfigureKeyVaultCertificates ? (
+                    <button className="button" type="button" onClick={createCertificate} disabled={!selectedTenant || Boolean(certificateBusy)}>
+                      {certificateBusy === "create" ? "Creating..." : "Create Certificate"}
+                    </button>
+                  ) : null}
+                  {canManageTenants && canConfigureKeyVaultCertificates ? (
+                    <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !form.keyVaultCertificateUri || Boolean(certificateBusy)}>
+                      {certificateBusy === "download" ? "Downloading..." : "Download .cer"}
+                    </button>
+                  ) : null}
                   {canRunAssessments ? <button className="button" type="button" onClick={runAssessment} disabled={!selectedTenant}>Run Assessment</button> : null}
-                  {canDeleteTenants ? <button className="button" type="button">Delete Tenant</button> : null}
+                  {canDeleteTenants ? <button className="button" type="button" onClick={deleteTenant} disabled={!selectedTenant}>Delete Tenant</button> : null}
                 </div>
               </form>
 

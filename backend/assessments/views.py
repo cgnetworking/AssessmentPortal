@@ -2,8 +2,9 @@ import json
 from functools import wraps
 
 from django.contrib.auth import logout
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db.models import Count, Q
-from django.http import HttpResponseNotAllowed, JsonResponse
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -11,6 +12,7 @@ from .audit import audit_metadata_diff, record_audit_event, tenant_audit_snapsho
 from .models import AssessmentRun, AuditEvent, TenantProfile
 from .roles import require_permission, user_permissions, user_roles
 from .serializers import audit_event_to_dict, log_to_dict, run_to_dict, tenant_to_dict
+from .services.certificates import create_certificate_for_tenant, get_public_certificate_der
 
 
 def parse_json(request):
@@ -178,6 +180,64 @@ def tenant_detail(request, tenant_id):
         return JsonResponse({}, status=204)
 
     return HttpResponseNotAllowed(["GET", "PUT", "PATCH", "DELETE"])
+
+
+@require_auth
+def tenant_certificate(request, tenant_id):
+    tenant = get_object_or_404(TenantProfile, id=tenant_id)
+    permissions = user_permissions(request.user)
+    if "manageTenantProfiles" not in permissions:
+        return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
+    if "configureKeyVaultCertificates" not in permissions:
+        return JsonResponse({"detail": "Forbidden", "requiredPermission": "configureKeyVaultCertificates"}, status=403)
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    try:
+        before = tenant_audit_snapshot(tenant)
+        created = create_certificate_for_tenant(tenant)
+    except ImproperlyConfigured as exc:
+        return JsonResponse({"detail": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"detail": f"Certificate creation failed: {exc}"}, status=502)
+
+    tenant.certificate_thumbprint = created.certificate_thumbprint
+    tenant.key_vault_certificate_uri = created.key_vault_certificate_uri
+    tenant.save(update_fields=["certificate_thumbprint", "key_vault_certificate_uri", "updated_at"])
+    after = tenant_audit_snapshot(tenant)
+    record_audit_event(
+        request=request,
+        action=AuditEvent.Action.CERTIFICATE_CREATED,
+        target=tenant,
+        metadata={"changes": audit_metadata_diff(before, after)},
+    )
+    return JsonResponse({"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=True)}, status=201)
+
+
+@require_auth
+def tenant_certificate_download(request, tenant_id):
+    tenant = get_object_or_404(TenantProfile, id=tenant_id)
+    permissions = user_permissions(request.user)
+    if "manageTenantProfiles" not in permissions:
+        return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
+    if "configureKeyVaultCertificates" not in permissions:
+        return JsonResponse({"detail": "Forbidden", "requiredPermission": "configureKeyVaultCertificates"}, status=403)
+
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    try:
+        certificate_der = get_public_certificate_der(tenant)
+    except (ImproperlyConfigured, ValidationError) as exc:
+        return JsonResponse({"detail": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"detail": f"Certificate download failed: {exc}"}, status=502)
+
+    filename = f"{tenant.display_name or tenant.tenant_id}.cer".replace("/", "-").replace("\\", "-")
+    response = HttpResponse(certificate_der, content_type="application/x-x509-ca-cert")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @require_auth

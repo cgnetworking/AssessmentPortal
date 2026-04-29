@@ -132,3 +132,4 @@ X_FRAME_OPTIONS = "DENY"
 ZTA_MODULE_PATH = Path(os.environ.get("ZTA_MODULE_PATH", REPO_ROOT / "modules" / "ZeroTrustAssessment"))
 ZTA_RUNNER_SCRIPT = Path(os.environ.get("ZTA_RUNNER_SCRIPT", BASE_DIR / "assessments" / "powershell" / "run_assessment.ps1"))
 ZTA_OUTPUT_ROOT = Path(os.environ.get("ZTA_OUTPUT_ROOT", BASE_DIR / "var" / "assessment-runs"))
+ZTA_KEY_VAULT_URL = os.environ.get("ZTA_KEY_VAULT_URL", "").strip().rstrip("/")
