@@ -13,6 +13,7 @@ ROLE_DEFINITIONS = {
         "configureKeyVaultCertificates",
         "deleteTenants",
         "runAssessments",
+        "viewAuditLog",
         "viewResults",
     },
     ASSESSMENT_OPERATOR: {

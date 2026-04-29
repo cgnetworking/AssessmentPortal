@@ -1,5 +1,7 @@
 import uuid
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -82,3 +84,49 @@ class ReportArtifact(models.Model):
     storage_uri = models.TextField()
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class AuditEvent(models.Model):
+    class Action(models.TextChoices):
+        LOGIN = "login", "Login"
+        LOGOUT = "logout", "Logout"
+        ROLE_ASSIGNED = "role_assigned", "Role assigned"
+        ROLE_REMOVED = "role_removed", "Role removed"
+        TENANT_CREATED = "tenant_created", "Tenant created"
+        TENANT_UPDATED = "tenant_updated", "Tenant updated"
+        TENANT_DELETED = "tenant_deleted", "Tenant deleted"
+        ASSESSMENT_QUEUED = "assessment_queued", "Assessment queued"
+        RUN_VIEWED = "run_viewed", "Run viewed"
+        AUDIT_LOG_VIEWED = "audit_log_viewed", "Audit log viewed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    actor_username = models.CharField(max_length=255, blank=True)
+    actor_email = models.EmailField(blank=True)
+    action = models.CharField(max_length=64, choices=Action.choices)
+    target_type = models.CharField(max_length=64, blank=True)
+    target_id = models.CharField(max_length=128, blank=True)
+    target_label = models.CharField(max_length=255, blank=True)
+    tenant_profile = models.ForeignKey(TenantProfile, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    assessment_run = models.ForeignKey(AssessmentRun, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    source_ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+            models.Index(fields=["actor_username", "-created_at"]),
+            models.Index(fields=["target_type", "target_id"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding and AuditEvent.objects.filter(pk=self.pk).exists():
+            raise ValidationError("Audit events are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Audit events are immutable.")

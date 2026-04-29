@@ -148,6 +148,10 @@ input {
   padding: 24px 28px 40px;
 }
 
+.blank-home {
+  min-height: calc(100vh - 56px);
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -536,6 +540,79 @@ a {
   background: #fbf9ff;
   color: #271940;
   font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.audit-hero {
+  margin-bottom: 20px;
+}
+
+.audit-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.audit-summary {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.audit-summary strong {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 650;
+}
+
+.audit-table-wrap {
+  margin-bottom: 0;
+}
+
+.audit-table {
+  min-width: 1380px;
+}
+
+.audit-table td {
+  vertical-align: top;
+}
+
+.audit-cell-main {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.audit-cell-muted {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.audit-user-agent {
+  max-width: 260px;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.audit-id {
+  max-width: 180px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  color: var(--muted);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.metadata-block {
+  max-width: 420px;
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #271940;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  white-space: pre;
 }
 
 .error-banner {

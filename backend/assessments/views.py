@@ -5,11 +5,12 @@ from django.contrib.auth import logout
 from django.db.models import Count, Q
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 
-from .models import AssessmentRun, TenantProfile
+from .audit import audit_metadata_diff, record_audit_event, tenant_audit_snapshot
+from .models import AssessmentRun, AuditEvent, TenantProfile
 from .roles import require_permission, user_permissions, user_roles
-from .serializers import log_to_dict, run_to_dict, tenant_to_dict
+from .serializers import audit_event_to_dict, log_to_dict, run_to_dict, tenant_to_dict
 
 
 def parse_json(request):
@@ -32,6 +33,7 @@ def health(_request):
     return JsonResponse({"status": "ok"})
 
 
+@ensure_csrf_cookie
 def auth_session(request):
     if not request.user.is_authenticated:
         return JsonResponse({"authenticated": False, "loginUrl": "/auth/login/azuread-tenant-oauth2/"}, status=401)
@@ -52,10 +54,11 @@ def auth_session(request):
     )
 
 
-@csrf_exempt
 def auth_logout(request):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
+    if request.user.is_authenticated:
+        record_audit_event(request=request, action=AuditEvent.Action.LOGOUT, target=request.user, target_type="User")
     logout(request)
     return JsonResponse({"authenticated": False})
 
@@ -78,7 +81,6 @@ def dashboard_summary(_request):
     )
 
 
-@csrf_exempt
 @require_auth
 def tenant_collection(request):
     permissions = user_permissions(request.user)
@@ -101,12 +103,17 @@ def tenant_collection(request):
             sharepoint_admin_url=data.get("sharePointAdminUrl", "").strip(),
             enabled_connectors=data.get("enabledConnectors", []),
         )
+        record_audit_event(
+            request=request,
+            action=AuditEvent.Action.TENANT_CREATED,
+            target=tenant,
+            metadata={"tenant": tenant_audit_snapshot(tenant)},
+        )
         return JsonResponse({"tenant": tenant_to_dict(tenant)}, status=201)
 
     return HttpResponseNotAllowed(["GET", "POST"])
 
 
-@csrf_exempt
 @require_auth
 def tenant_detail(request, tenant_id):
     tenant = get_object_or_404(TenantProfile, id=tenant_id)
@@ -121,6 +128,7 @@ def tenant_detail(request, tenant_id):
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
         data = parse_json(request)
+        before = tenant_audit_snapshot(tenant)
         field_map = {
             "displayName": "display_name",
             "tenantId": "tenant_id",
@@ -135,18 +143,30 @@ def tenant_detail(request, tenant_id):
             if api_name in data:
                 setattr(tenant, model_name, data[api_name])
         tenant.save()
+        after = tenant_audit_snapshot(tenant)
+        record_audit_event(
+            request=request,
+            action=AuditEvent.Action.TENANT_UPDATED,
+            target=tenant,
+            metadata={"changes": audit_metadata_diff(before, after)},
+        )
         return JsonResponse({"tenant": tenant_to_dict(tenant)})
 
     if request.method == "DELETE":
         if "deleteTenants" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "deleteTenants"}, status=403)
+        record_audit_event(
+            request=request,
+            action=AuditEvent.Action.TENANT_DELETED,
+            target=tenant,
+            metadata={"tenant": tenant_audit_snapshot(tenant)},
+        )
         tenant.delete()
         return JsonResponse({}, status=204)
 
     return HttpResponseNotAllowed(["GET", "PUT", "PATCH", "DELETE"])
 
 
-@csrf_exempt
 @require_auth
 def run_collection(request):
     permissions = user_permissions(request.user)
@@ -165,6 +185,12 @@ def run_collection(request):
         data = parse_json(request)
         tenant = get_object_or_404(TenantProfile, id=data.get("tenantProfileId"))
         run = AssessmentRun.objects.create(tenant_profile=tenant, pillar=data.get("pillar", "All"))
+        record_audit_event(
+            request=request,
+            action=AuditEvent.Action.ASSESSMENT_QUEUED,
+            target=run,
+            metadata={"pillar": run.pillar, "tenantProfileId": str(tenant.id), "tenantDisplayName": tenant.display_name},
+        )
         return JsonResponse({"run": run_to_dict(run)}, status=201)
 
     return HttpResponseNotAllowed(["GET", "POST"])
@@ -172,8 +198,14 @@ def run_collection(request):
 
 @require_auth
 @require_permission("viewResults")
-def run_detail(_request, run_id):
+def run_detail(request, run_id):
     run = get_object_or_404(AssessmentRun, id=run_id)
+    record_audit_event(
+        request=request,
+        action=AuditEvent.Action.RUN_VIEWED,
+        target=run,
+        metadata={"tenantProfileId": str(run.tenant_profile_id), "status": run.status},
+    )
     return JsonResponse(
         {
             "run": run_to_dict(run),
@@ -181,3 +213,15 @@ def run_detail(_request, run_id):
             "results": list(run.results.values("test_id", "pillar", "name", "status", "risk", "recommendation", "evidence")),
         }
     )
+
+
+@require_auth
+@require_permission("viewAuditLog")
+def audit_log(request):
+    try:
+        limit = min(max(int(request.GET.get("limit", "250")), 1), 500)
+    except ValueError:
+        return JsonResponse({"detail": "limit must be an integer"}, status=400)
+    events = list(AuditEvent.objects.select_related("actor", "tenant_profile", "assessment_run")[:limit])
+    record_audit_event(request=request, action=AuditEvent.Action.AUDIT_LOG_VIEWED, target_type="AuditEvent", metadata={"limit": limit})
+    return JsonResponse({"events": [audit_event_to_dict(event) for event in events]})

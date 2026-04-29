@@ -12,4 +12,5 @@ urlpatterns = [
     path("tenants/<uuid:tenant_id>/", views.tenant_detail, name="tenant-detail"),
     path("runs/", views.run_collection, name="run-collection"),
     path("runs/<uuid:run_id>/", views.run_detail, name="run-detail"),
+    path("audit-log/", views.audit_log, name="audit-log"),
 ]

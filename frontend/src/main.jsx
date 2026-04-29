@@ -13,14 +13,30 @@ const emptyTenant = {
   enabledConnectors: ["Graph"]
 };
 
+function getCookie(name) {
+  return document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${name}=`))
+    ?.slice(name.length + 1) || "";
+}
+
 async function api(path, options = {}) {
+  const { headers: optionHeaders, ...fetchOptions } = options;
+  const method = (options.method || "GET").toUpperCase();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(optionHeaders || {})
+  };
+
+  if (!["GET", "HEAD", "OPTIONS", "TRACE"].includes(method)) {
+    headers["X-CSRFToken"] = decodeURIComponent(getCookie("csrftoken"));
+  }
+
   const response = await fetch(`/api${path}`, {
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
+    headers,
+    ...fetchOptions
   });
   if (!response.ok) {
     const error = new Error(`API request failed: ${response.status}`);
@@ -186,7 +202,16 @@ function App() {
             <span>Find...</span>
           </div>
           <nav className="nav">
-            <a className="nav-item active" href="#" aria-current="page">
+            <a className="nav-item" href="/">
+              <span className="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 11l9-8 9 8" />
+                  <path d="M5 10v10h14V10" />
+                </svg>
+              </span>
+              Home
+            </a>
+            <a className="nav-item active" href="/assessments.html" aria-current="page">
               <span className="nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M9 11l2 2 4-5" />
@@ -196,6 +221,19 @@ function App() {
               </span>
               Assessments
             </a>
+            {permissions.includes("viewAuditLog") ? (
+              <a className="nav-item" href="/audit-log.html">
+                <span className="nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 2v6h6" />
+                    <path d="M8 13h8" />
+                    <path d="M8 17h6" />
+                  </svg>
+                </span>
+                Audit Log
+              </a>
+            ) : null}
           </nav>
         </aside>
 

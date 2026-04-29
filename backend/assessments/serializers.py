@@ -38,3 +38,25 @@ def log_to_dict(log):
         "message": log.message,
         "createdAt": log.created_at.isoformat(),
     }
+
+
+def audit_event_to_dict(event):
+    return {
+        "id": str(event.id),
+        "createdAt": event.created_at.isoformat(),
+        "actor": {
+            "id": event.actor_id,
+            "username": event.actor_username,
+            "email": event.actor_email,
+        },
+        "action": event.action,
+        "actionLabel": event.get_action_display(),
+        "targetType": event.target_type,
+        "targetId": event.target_id,
+        "targetLabel": event.target_label,
+        "tenantProfileId": str(event.tenant_profile_id) if event.tenant_profile_id else None,
+        "assessmentRunId": str(event.assessment_run_id) if event.assessment_run_id else None,
+        "sourceIp": event.source_ip,
+        "userAgent": event.user_agent,
+        "metadata": event.metadata,
+    }
