@@ -16,7 +16,14 @@ def require_env(name):
     return value
 
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
+def require_min_length_env(name, minimum_length):
+    value = require_env(name)
+    if len(value) < minimum_length:
+        raise ImproperlyConfigured(f"{name} must be at least {minimum_length} characters long.")
+    return value
+
+
+SECRET_KEY = require_min_length_env("DJANGO_SECRET_KEY", 50)
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 
