@@ -2,10 +2,22 @@
 
 ## Assessment Runtime Requirements
 
+- The application and assessment worker will run only on Ubuntu 24.04 or newer.
 - The portal will run the Microsoft Zero Trust Assessment PowerShell module through a backend worker.
 - DuckDB must not be installed or used anywhere in the runtime path.
+- The forked module lives under `modules/ZeroTrustAssessment`.
+- The forked module must not bundle or load DuckDB native libraries or require the Microsoft Visual C++ Redistributable.
+- The forked module uses PostgreSQL through the Ubuntu `psql` client and standard PostgreSQL environment variables.
 - Assessment results must be persisted to Azure Database for PostgreSQL.
 - The portal and worker will connect to Azure resources using managed identity.
+
+## PostgreSQL Runtime
+
+The worker must provide PostgreSQL connectivity before invoking the module:
+
+- `ZT_POSTGRES_CONNECTION_STRING` or `DATABASE_URL`, or standard `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and related `PG*` variables.
+- `ZT_POSTGRES_SCHEMA` may be set to isolate an assessment run; otherwise the module uses the `main` schema.
+- For Azure Database for PostgreSQL with managed identity, the worker is responsible for acquiring the Entra access token and passing it as the PostgreSQL password.
 
 ## Tenant Authentication
 
