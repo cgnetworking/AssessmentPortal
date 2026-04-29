@@ -72,7 +72,6 @@ Set these values:
 - `AZUREAD_AUTH_CLIENT_ID`
 - `AZUREAD_AUTH_CLIENT_SECRET`
 - `AZUREAD_AUTH_TENANT_ID`
-- `AZURE_CLIENT_ID`, only if the assessment runner needs it for app-only assessment authentication
 
 Do not configure these values:
 
@@ -137,7 +136,7 @@ Certificate private keys must remain in Azure Key Vault. Store only certificate 
 - Certificate thumbprint
 - Key Vault certificate URI
 
-To create certificates from the portal UI, set `ZTA_KEY_VAULT_URL` to the target vault URL, such as `https://example.vault.azure.net`. The Linux server uses its system-assigned managed identity to create a self-signed PFX certificate, imports it as an exportable Key Vault certificate object, and saves the resulting certificate URI and thumbprint on the tenant profile. The managed identity needs `certificates/import` and `certificates/get` for the portal action, and `secrets/get` for the assessment runner to load the certificate object's backing PFX secret at runtime.
+To create certificates from the portal UI, set `ZTA_KEY_VAULT_URL` to the target vault URL, such as `https://example.vault.azure.net`. The Key Vault URL is environment-only configuration and cannot be set from the UI or tenant profile API. The Linux server uses its system-assigned managed identity to create a self-signed PFX certificate, imports it as an exportable Key Vault certificate object in the configured vault, and saves the resulting certificate URI and thumbprint on the tenant profile. The managed identity needs `certificates/import` and `certificates/get` for the portal action, and `secrets/get` for the assessment runner to load the certificate object's backing PFX secret at runtime.
 
 The public `.cer` download contains only the public certificate. Upload that `.cer` to the Microsoft Entra app registration identified by the tenant profile Client ID before running assessments with the new certificate.
 

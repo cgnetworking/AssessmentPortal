@@ -6,9 +6,9 @@ const emptyTenant = {
   displayName: "",
   tenantId: "",
   clientId: "",
-  certificateThumbprint: "",
-  keyVaultCertificateUri: ""
+  certificateThumbprint: ""
 };
+const guidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 
 function getCookie(name) {
   return document.cookie
@@ -123,8 +123,7 @@ function App() {
         displayName: tenant.displayName || "",
         tenantId: tenant.tenantId || "",
         clientId: tenant.clientId || "",
-        certificateThumbprint: tenant.certificateThumbprint || "",
-        keyVaultCertificateUri: tenant.keyVaultCertificateUri || ""
+        certificateThumbprint: tenant.certificateThumbprint || ""
       });
       api(`/runs/?tenantProfileId=${tenant.id}`)
         .then((data) => setRuns(data.runs))
@@ -178,8 +177,7 @@ function App() {
         displayName: data.tenant.displayName || "",
         tenantId: data.tenant.tenantId || "",
         clientId: data.tenant.clientId || "",
-        certificateThumbprint: data.tenant.certificateThumbprint || "",
-        keyVaultCertificateUri: data.tenant.keyVaultCertificateUri || ""
+        certificateThumbprint: data.tenant.certificateThumbprint || ""
       });
       await refresh();
     } catch (err) {
@@ -370,12 +368,9 @@ function App() {
               <p className="eyebrow">Tenant Configuration</p>
               <form className="settings-form" onSubmit={saveTenant}>
                 <Field label="Display Name" value={form.displayName} onChange={(value) => updateField("displayName", value)} disabled={!canManageTenants} />
-                <Field label="Tenant ID" value={form.tenantId} onChange={(value) => updateField("tenantId", value)} disabled={!canManageTenants} />
-                <Field label="Client ID" value={form.clientId} onChange={(value) => updateField("clientId", value)} disabled={!canManageTenants} />
+                <Field label="Tenant ID" value={form.tenantId} onChange={(value) => updateField("tenantId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
+                <Field label="Client ID" value={form.clientId} onChange={(value) => updateField("clientId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
                 <Field label="Certificate Thumbprint" value={form.certificateThumbprint} onChange={(value) => updateField("certificateThumbprint", value)} disabled={!canManageTenants} />
-                {canConfigureKeyVaultCertificates ? (
-                  <Field label="Key Vault Certificate URI" value={form.keyVaultCertificateUri} onChange={(value) => updateField("keyVaultCertificateUri", value)} wide />
-                ) : null}
                 <div className="actions form-actions">
                   {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
                   {canManageTenants && canConfigureKeyVaultCertificates ? (
@@ -384,7 +379,7 @@ function App() {
                     </button>
                   ) : null}
                   {canManageTenants && canConfigureKeyVaultCertificates ? (
-                    <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !form.keyVaultCertificateUri || Boolean(certificateBusy)}>
+                    <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !form.certificateThumbprint || Boolean(certificateBusy)}>
                       {certificateBusy === "download" ? "Downloading..." : "Download .cer"}
                     </button>
                   ) : null}
@@ -444,11 +439,11 @@ function SummaryCard({ label, value }) {
   );
 }
 
-function Field({ label, value, onChange, wide = false, disabled = false }) {
+function Field({ label, value, onChange, wide = false, disabled = false, maxLength, pattern }) {
   return (
     <label className={wide ? "wide-field" : ""}>
       <span>{label}</span>
-      <input type="text" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
+      <input type="text" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} maxLength={maxLength} pattern={pattern} />
     </label>
   );
 }

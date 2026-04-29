@@ -39,7 +39,7 @@ class KeyVaultCertificateRef:
 
 
 def create_certificate_for_tenant(tenant) -> CreatedCertificate:
-    vault_url = _resolve_vault_url(tenant.key_vault_certificate_uri)
+    vault_url = _resolve_vault_url()
     name = _certificate_name(tenant)
     cert, pfx_base64 = _generate_certificate(tenant)
 
@@ -82,7 +82,8 @@ def create_certificate_for_tenant(tenant) -> CreatedCertificate:
 
 
 def get_public_certificate_der(tenant) -> bytes:
-    vault_url = _resolve_vault_url(tenant.key_vault_certificate_uri)
+    vault_url = _resolve_vault_url()
+    _validate_certificate_uri_uses_configured_vault(tenant.key_vault_certificate_uri, vault_url)
     parsed = urlparse(tenant.key_vault_certificate_uri)
     parts = [part for part in parsed.path.split("/") if part]
     if parts and parts[0] == "certificates":
@@ -173,18 +174,22 @@ def _generate_certificate(tenant):
     return cert, base64.b64encode(pfx).decode("ascii")
 
 
-def _resolve_vault_url(existing_uri):
-    if existing_uri:
-        parsed = urlparse(existing_uri)
-        if parsed.scheme == "https" and parsed.netloc.endswith(".vault.azure.net"):
-            return f"{parsed.scheme}://{parsed.netloc}"
-
+def _resolve_vault_url():
     if settings.ZTA_KEY_VAULT_URL:
         parsed = urlparse(settings.ZTA_KEY_VAULT_URL)
         if parsed.scheme == "https" and parsed.netloc.endswith(".vault.azure.net"):
             return settings.ZTA_KEY_VAULT_URL
 
     raise ImproperlyConfigured("ZTA_KEY_VAULT_URL must be set to an Azure Key Vault URL.")
+
+
+def _validate_certificate_uri_uses_configured_vault(uri, vault_url):
+    parsed_uri = urlparse(uri)
+    parsed_vault = urlparse(vault_url)
+    if parsed_uri.scheme != "https" or not parsed_uri.netloc.endswith(".vault.azure.net"):
+        raise ValidationError("Tenant does not have a valid Key Vault certificate URI.")
+    if parsed_uri.netloc.lower() != parsed_vault.netloc.lower():
+        raise ValidationError("Tenant Key Vault certificate URI must belong to the configured ZTA_KEY_VAULT_URL vault.")
 
 
 def _secret_ref_from_uri(uri):

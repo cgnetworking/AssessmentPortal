@@ -19,12 +19,12 @@ function Get-ZtManagedIdentityToken {
     )
 
     $encodedResource = [uri]::EscapeDataString($Resource)
-    $clientId = $env:AZURE_CLIENT_ID
+    $managedIdentityClientId = $env:AZURE_CLIENT_ID
 
     if ($env:IDENTITY_ENDPOINT -and $env:IDENTITY_HEADER) {
         $uri = "$($env:IDENTITY_ENDPOINT)?api-version=2019-08-01&resource=$encodedResource"
-        if ($clientId) {
-            $uri = "$uri&client_id=$([uri]::EscapeDataString($clientId))"
+        if ($managedIdentityClientId) {
+            $uri = "$uri&client_id=$([uri]::EscapeDataString($managedIdentityClientId))"
         }
 
         $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{
@@ -34,8 +34,8 @@ function Get-ZtManagedIdentityToken {
     }
 
     $uri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$encodedResource"
-    if ($clientId) {
-        $uri = "$uri&client_id=$([uri]::EscapeDataString($clientId))"
+    if ($managedIdentityClientId) {
+        $uri = "$uri&client_id=$([uri]::EscapeDataString($managedIdentityClientId))"
     }
 
     $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{ Metadata = 'true' } -TimeoutSec 10

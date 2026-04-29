@@ -21,6 +21,14 @@ def parse_json(request):
     return json.loads(request.body.decode("utf-8"))
 
 
+def validation_error_response(exc):
+    if hasattr(exc, "message_dict"):
+        errors = exc.message_dict
+    else:
+        errors = {"nonFieldErrors": exc.messages}
+    return JsonResponse({"detail": "Validation failed.", "errors": errors}, status=400)
+
+
 def require_auth(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):
@@ -86,17 +94,13 @@ def dashboard_summary(_request):
 @require_auth
 def tenant_collection(request):
     permissions = user_permissions(request.user)
-    include_key_vault_certificate_uri = "configureKeyVaultCertificates" in permissions
     if request.method == "GET":
         if "viewTenantProfiles" not in permissions and "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "viewTenantProfiles"}, status=403)
         return JsonResponse(
             {
                 "tenants": [
-                    tenant_to_dict(
-                        tenant,
-                        include_key_vault_certificate_uri=include_key_vault_certificate_uri,
-                    )
+                    tenant_to_dict(tenant)
                     for tenant in TenantProfile.objects.all()
                 ]
             }
@@ -106,15 +110,18 @@ def tenant_collection(request):
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
         data = parse_json(request)
-        if data.get("keyVaultCertificateUri") and not include_key_vault_certificate_uri:
-            return JsonResponse({"detail": "Forbidden", "requiredPermission": "configureKeyVaultCertificates"}, status=403)
-        tenant = TenantProfile.objects.create(
-            display_name=data.get("displayName", "").strip(),
-            tenant_id=data.get("tenantId", "").strip(),
-            client_id=data.get("clientId", "").strip(),
-            certificate_thumbprint=data.get("certificateThumbprint", "").strip(),
-            key_vault_certificate_uri=data.get("keyVaultCertificateUri", "").strip(),
-        )
+        if "keyVaultCertificateUri" in data:
+            return JsonResponse({"detail": "Key Vault certificate URI is managed by the server from ZTA_KEY_VAULT_URL."}, status=400)
+        try:
+            tenant = TenantProfile.objects.create(
+                display_name=data.get("displayName", "").strip(),
+                tenant_id=data.get("tenantId") or "",
+                client_id=data.get("clientId") or "",
+                certificate_thumbprint=data.get("certificateThumbprint", "").strip(),
+                key_vault_certificate_uri="",
+            )
+        except ValidationError as exc:
+            return validation_error_response(exc)
         record_audit_event(
             request=request,
             action=AuditEvent.Action.TENANT_CREATED,
@@ -122,7 +129,7 @@ def tenant_collection(request):
             metadata={"tenant": tenant_audit_snapshot(tenant)},
         )
         return JsonResponse(
-            {"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=include_key_vault_certificate_uri)},
+            {"tenant": tenant_to_dict(tenant)},
             status=201,
         )
 
@@ -133,31 +140,32 @@ def tenant_collection(request):
 def tenant_detail(request, tenant_id):
     tenant = get_object_or_404(TenantProfile, id=tenant_id)
     permissions = user_permissions(request.user)
-    include_key_vault_certificate_uri = "configureKeyVaultCertificates" in permissions
 
     if request.method == "GET":
         if "viewTenantProfiles" not in permissions and "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "viewTenantProfiles"}, status=403)
-        return JsonResponse({"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=include_key_vault_certificate_uri)})
+        return JsonResponse({"tenant": tenant_to_dict(tenant)})
 
     if request.method in {"PUT", "PATCH"}:
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
         data = parse_json(request)
-        if "keyVaultCertificateUri" in data and not include_key_vault_certificate_uri:
-            return JsonResponse({"detail": "Forbidden", "requiredPermission": "configureKeyVaultCertificates"}, status=403)
+        if "keyVaultCertificateUri" in data:
+            return JsonResponse({"detail": "Key Vault certificate URI is managed by the server from ZTA_KEY_VAULT_URL."}, status=400)
         before = tenant_audit_snapshot(tenant)
         field_map = {
             "displayName": "display_name",
             "tenantId": "tenant_id",
             "clientId": "client_id",
             "certificateThumbprint": "certificate_thumbprint",
-            "keyVaultCertificateUri": "key_vault_certificate_uri",
         }
         for api_name, model_name in field_map.items():
             if api_name in data:
                 setattr(tenant, model_name, data[api_name])
-        tenant.save()
+        try:
+            tenant.save()
+        except ValidationError as exc:
+            return validation_error_response(exc)
         after = tenant_audit_snapshot(tenant)
         record_audit_event(
             request=request,
@@ -165,7 +173,7 @@ def tenant_detail(request, tenant_id):
             target=tenant,
             metadata={"changes": audit_metadata_diff(before, after)},
         )
-        return JsonResponse({"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=include_key_vault_certificate_uri)})
+        return JsonResponse({"tenant": tenant_to_dict(tenant)})
 
     if request.method == "DELETE":
         if "deleteTenants" not in permissions:
@@ -212,7 +220,7 @@ def tenant_certificate(request, tenant_id):
         target=tenant,
         metadata={"changes": audit_metadata_diff(before, after)},
     )
-    return JsonResponse({"tenant": tenant_to_dict(tenant, include_key_vault_certificate_uri=True)}, status=201)
+    return JsonResponse({"tenant": tenant_to_dict(tenant)}, status=201)
 
 
 @require_auth

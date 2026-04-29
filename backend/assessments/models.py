@@ -2,14 +2,20 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
+
+
+HEX_GUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+HEX_GUID_ERROR = "Must use the 8-4-4-4-12 hexadecimal GUID pattern, such as 12345678-abcd-1234-abcd-1234567890ab."
+hex_guid_validator = RegexValidator(regex=HEX_GUID_PATTERN, message=HEX_GUID_ERROR)
 
 
 class TenantProfile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     display_name = models.CharField(max_length=255)
-    tenant_id = models.CharField(max_length=64, unique=True)
-    client_id = models.CharField(max_length=64)
+    tenant_id = models.CharField(max_length=36, unique=True, validators=[hex_guid_validator])
+    client_id = models.CharField(max_length=36, validators=[hex_guid_validator])
     certificate_thumbprint = models.CharField(max_length=128, blank=True)
     key_vault_certificate_uri = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -17,9 +23,27 @@ class TenantProfile(models.Model):
 
     class Meta:
         ordering = ["display_name"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(tenant_id__regex=HEX_GUID_PATTERN), name="tenant_profile_tenant_id_hex_guid"),
+            models.CheckConstraint(condition=models.Q(client_id__regex=HEX_GUID_PATTERN), name="tenant_profile_client_id_hex_guid"),
+        ]
 
     def __str__(self):
         return self.display_name
+
+    def clean(self):
+        self.tenant_id = str(self.tenant_id or "").strip().lower()
+        self.client_id = str(self.client_id or "").strip().lower()
+
+    def validate_identifiers(self):
+        for field_name in ("tenant_id", "client_id"):
+            field = self._meta.get_field(field_name)
+            field.run_validators(getattr(self, field_name))
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        self.validate_identifiers()
+        return super().save(*args, **kwargs)
 
 
 class AssessmentRun(models.Model):
