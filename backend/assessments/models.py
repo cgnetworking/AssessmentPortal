@@ -14,7 +14,6 @@ class TenantProfile(models.Model):
     key_vault_certificate_uri = models.TextField()
     exchange_organization = models.CharField(max_length=255, blank=True)
     sharepoint_admin_url = models.URLField(blank=True)
-    enabled_connectors = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

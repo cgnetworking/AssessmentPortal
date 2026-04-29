@@ -9,8 +9,7 @@ const emptyTenant = {
   certificateThumbprint: "",
   keyVaultCertificateUri: "",
   exchangeOrganization: "",
-  sharePointAdminUrl: "",
-  enabledConnectors: ["Graph"]
+  sharePointAdminUrl: ""
 };
 
 function getCookie(name) {
@@ -128,8 +127,7 @@ function App() {
         certificateThumbprint: tenant.certificateThumbprint || "",
         keyVaultCertificateUri: tenant.keyVaultCertificateUri || "",
         exchangeOrganization: tenant.exchangeOrganization || "",
-        sharePointAdminUrl: tenant.sharePointAdminUrl || "",
-        enabledConnectors: tenant.enabledConnectors?.length ? tenant.enabledConnectors : ["Graph"]
+        sharePointAdminUrl: tenant.sharePointAdminUrl || ""
       });
       api(`/runs/?tenantProfileId=${tenant.id}`)
         .then((data) => setRuns(data.runs))
@@ -311,7 +309,6 @@ function App() {
                 ) : null}
                 <Field label="Exchange Organization" value={form.exchangeOrganization} onChange={(value) => updateField("exchangeOrganization", value)} disabled={!canManageTenants} />
                 <Field label="SharePoint Admin URL" value={form.sharePointAdminUrl} onChange={(value) => updateField("sharePointAdminUrl", value)} disabled={!canManageTenants} />
-                <ConnectorControls value={form.enabledConnectors} onChange={(value) => updateField("enabledConnectors", value)} disabled={!canManageTenants} />
                 <div className="actions form-actions">
                   {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
                   {canManageTenants ? <button className="button" type="button">Create Certificate</button> : null}
@@ -378,31 +375,6 @@ function Field({ label, value, onChange, wide = false, disabled = false }) {
       <span>{label}</span>
       <input type="text" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
     </label>
-  );
-}
-
-function ConnectorControls({ value, onChange, disabled = false }) {
-  const connectors = ["Graph", "ExchangeOnline", "SecurityCompliance", "SharePointOnline"];
-  return (
-    <fieldset className="connector-field wide-field">
-      <legend>Connectors</legend>
-      <div>
-        {connectors.map((connector) => (
-          <label key={connector}>
-            <input
-              type="checkbox"
-              checked={value.includes(connector)}
-              disabled={disabled}
-              onChange={(event) => {
-                if (event.target.checked) onChange([...value, connector]);
-                else onChange(value.filter((item) => item !== connector));
-              }}
-            />
-            <span>{connector}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
   );
 }
 

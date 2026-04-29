@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -89,7 +88,6 @@ class PowerShellAssessmentRunner:
                 "ZTA_CERTIFICATE_THUMBPRINT": tenant.certificate_thumbprint,
                 "ZTA_EXCHANGE_ORGANIZATION": tenant.exchange_organization,
                 "ZTA_SHAREPOINT_ADMIN_URL": tenant.sharepoint_admin_url,
-                "ZTA_ENABLED_CONNECTORS": json.dumps(tenant.enabled_connectors),
                 "ZTA_MODULE_PATH": str(settings.ZTA_MODULE_PATH),
                 "ZTA_OUTPUT_PATH": str(output_dir),
                 "ZTA_PILLAR": run.pillar,

@@ -114,7 +114,6 @@ def tenant_collection(request):
             key_vault_certificate_uri=data.get("keyVaultCertificateUri", "").strip(),
             exchange_organization=data.get("exchangeOrganization", "").strip(),
             sharepoint_admin_url=data.get("sharePointAdminUrl", "").strip(),
-            enabled_connectors=data.get("enabledConnectors", []),
         )
         record_audit_event(
             request=request,
@@ -156,7 +155,6 @@ def tenant_detail(request, tenant_id):
             "keyVaultCertificateUri": "key_vault_certificate_uri",
             "exchangeOrganization": "exchange_organization",
             "sharePointAdminUrl": "sharepoint_admin_url",
-            "enabledConnectors": "enabled_connectors",
         }
         for api_name, model_name in field_map.items():
             if api_name in data:

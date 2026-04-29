@@ -31,7 +31,6 @@ def tenant_audit_snapshot(tenant):
         "keyVaultCertificateUri": tenant.key_vault_certificate_uri,
         "exchangeOrganization": tenant.exchange_organization,
         "sharePointAdminUrl": tenant.sharepoint_admin_url,
-        "enabledConnectors": tenant.enabled_connectors,
     }
 
 
