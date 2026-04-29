@@ -37,7 +37,7 @@ Production deployment uses:
 - The PowerShell database engine obtains the PostgreSQL managed identity token at `psql` launch time and exposes it as `PGPASSWORD` only for that child process.
 - Tenant assessment authentication uses app-only certificate authentication.
 - Certificate private keys must stay in Azure Key Vault. Django stores only certificate metadata and Key Vault URIs.
-- The assessments UI can create a self-signed PFX certificate with the server's system-assigned managed identity, import it as a Key Vault certificate object in the vault configured by `ZTA_KEY_VAULT_URL`, and save the returned Key Vault certificate URI on the tenant profile.
+- The assessments UI can create a self-signed PFX certificate with the server's system-assigned managed identity, import it as a Key Vault certificate object in the vault configured by `ZTA_KEY_VAULT_URL`, and save the returned Key Vault certificate URI on the tenant profile. The Key Vault URL is environment-only configuration and is not set through the UI or tenant profile API.
 - The assessment runner retrieves certificate material from Key Vault at run time with managed identity.
 - Password, delegated user, interactive browser, device code, client secret, and local certificate-store authentication paths are not supported for tenant assessments.
 
@@ -111,6 +111,8 @@ Primary endpoints:
 - `GET /api/tenants/<tenant-id>/`
 - `PATCH /api/tenants/<tenant-id>/`
 - `DELETE /api/tenants/<tenant-id>/`
+- `POST /api/tenants/<tenant-id>/certificate/`
+- `GET /api/tenants/<tenant-id>/certificate/download/`
 - `GET /api/runs/?tenantProfileId=<tenant-id>`
 - `POST /api/runs/`
 - `GET /api/runs/<run-id>/`

@@ -60,7 +60,7 @@ sudo nano /etc/assessmentportal/assessmentportal.env
 
 Set these values:
 
-- `DJANGO_SECRET_KEY`
+- `DJANGO_SECRET_KEY`, at least 50 characters
 - `DJANGO_ALLOWED_HOSTS`
 - `FRONTEND_URL`
 - `CSRF_TRUSTED_ORIGINS`
@@ -72,6 +72,7 @@ Set these values:
 - `AZUREAD_AUTH_CLIENT_ID`
 - `AZUREAD_AUTH_CLIENT_SECRET`
 - `AZUREAD_AUTH_TENANT_ID`
+- `ZTA_KEY_VAULT_URL`
 
 Do not configure these values:
 
