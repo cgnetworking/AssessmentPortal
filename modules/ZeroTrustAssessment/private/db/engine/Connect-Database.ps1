@@ -9,10 +9,10 @@ function Connect-Database {
 		performed through psql so this fork does not load native database
 		assemblies.
 
-		Set ZT_POSTGRES_CONNECTION_STRING, DATABASE_URL, or standard PG* environment
-		variables before calling this command. For Azure Database for PostgreSQL with
-		managed identity, the worker should provide the Entra access token through
-		PGPASSWORD or the password field in ZT_POSTGRES_CONNECTION_STRING.
+		Set standard PG* environment variables before calling this command. The
+		assessment portal supports Azure Database for PostgreSQL with managed
+		identity only; the worker must provide the Entra access token through
+		PGPASSWORD.
 	#>
 	[CmdletBinding()]
 	param (
@@ -32,8 +32,8 @@ function Connect-Database {
 		$Transient
 	)
 
-	if (-not $ConnectionString -and $env:DATABASE_URL) {
-		$ConnectionString = $env:DATABASE_URL
+	if ($ConnectionString -or $env:DATABASE_URL) {
+		throw 'Connection strings are not supported. Use PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT, and PGSSLMODE supplied by the managed-identity worker.'
 	}
 
 	Write-PSFMessage -Level System -Message 'Establishing a PostgreSQL assessment database handle for schema {0}' -StringValues $Schema -Tag DB

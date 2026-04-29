@@ -11,18 +11,18 @@
 - The application and assessment worker will run only on Ubuntu 24.04 or newer.
 - The portal will run the Microsoft Zero Trust Assessment PowerShell module through a backend worker.
 - The forked module lives under `modules/ZeroTrustAssessment`.
-- The forked module uses PostgreSQL through the Ubuntu `psql` client and standard PostgreSQL environment variables.
+- The forked module uses Azure Database for PostgreSQL through the Ubuntu `psql` client and standard PostgreSQL environment variables populated by the worker.
 - Assessment results must be persisted to Azure Database for PostgreSQL.
 - The portal and worker will connect to Azure resources using managed identity.
 - The assessment worker expects `pwsh`, `psql`, the required Microsoft PowerShell service modules, and managed identity access to Key Vault and Azure Database for PostgreSQL.
 
 ## PostgreSQL Runtime
 
-The worker must provide PostgreSQL connectivity before invoking the module:
+The worker provides PostgreSQL connectivity before invoking the module:
 
-- `ZT_POSTGRES_CONNECTION_STRING` or `DATABASE_URL`, or standard `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and related `PG*` variables.
+- `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGPORT`, and `PGSSLMODE`.
 - `ZT_POSTGRES_SCHEMA` may be set to isolate an assessment run; otherwise the module uses the `main` schema.
-- For Azure Database for PostgreSQL with managed identity, the worker is responsible for acquiring the Entra access token and passing it as the PostgreSQL password.
+- The portal supports Azure Database for PostgreSQL with managed identity only. The worker acquires an Entra access token and passes it as `PGPASSWORD`.
 
 ## Production Django Backend
 
@@ -33,7 +33,6 @@ Required production environment variables:
 - `POSTGRES_HOST`
 - `POSTGRES_DB`
 - `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
 - `POSTGRES_PORT`, defaults to `5432`
 - `POSTGRES_SSLMODE`, defaults to `require`
 - `AZUREAD_AUTH_CLIENT_ID`
@@ -41,6 +40,8 @@ Required production environment variables:
 - `AZUREAD_AUTH_TENANT_ID`
 - `FRONTEND_URL`, set to the public portal origin, such as `https://<host>`
 - `CSRF_TRUSTED_ORIGINS`, set to the public portal origin, such as `https://<host>`
+
+Do not configure `POSTGRES_PASSWORD`, `DATABASE_URL`, or `ZT_POSTGRES_CONNECTION_STRING`; static password and local database connection paths are intentionally unsupported.
 
 The Microsoft Entra app registration redirect URI must be:
 

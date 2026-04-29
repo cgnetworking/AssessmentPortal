@@ -1,9 +1,20 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
+from assessment_portal.azure_postgres import validate_remote_postgres_host
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent
+
+
+def require_env(name):
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise ImproperlyConfigured(f"{name} is required.")
+    return value
+
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
@@ -52,16 +63,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "assessment_portal.wsgi.application"
 
+POSTGRES_HOST = require_env("POSTGRES_HOST")
+POSTGRES_DB = require_env("POSTGRES_DB")
+POSTGRES_USER = require_env("POSTGRES_USER")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
+POSTGRES_SSLMODE = os.environ.get("POSTGRES_SSLMODE", "require")
+
+validate_remote_postgres_host(POSTGRES_HOST)
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB", "assessment_portal"),
-        "USER": os.environ.get("POSTGRES_USER", ""),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-        "HOST": os.environ.get("POSTGRES_HOST", ""),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "ENGINE": "assessment_portal.db.backends.azure_postgresql",
+        "NAME": POSTGRES_DB,
+        "USER": POSTGRES_USER,
+        "HOST": POSTGRES_HOST,
+        "PORT": POSTGRES_PORT,
         "OPTIONS": {
-            "sslmode": os.environ.get("POSTGRES_SSLMODE", "require"),
+            "sslmode": POSTGRES_SSLMODE,
         },
     }
 }

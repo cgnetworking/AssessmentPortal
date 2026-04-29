@@ -14,7 +14,7 @@ function Test-DatabaseAssembly {
 	if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
 		Write-Host
 		Write-Host "PostgreSQL client 'psql' is required on Ubuntu 24.04+." -ForegroundColor Red
-		Write-Host "Install postgresql-client and configure ZT_POSTGRES_CONNECTION_STRING or PG* environment variables." -ForegroundColor Yellow
+		Write-Host "Install postgresql-client and configure the managed-identity worker to provide PG* environment variables." -ForegroundColor Yellow
 		Write-Host
 		return $false
 	}
