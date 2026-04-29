@@ -9,6 +9,7 @@ User=assessmentportal
 Group=assessmentportal
 WorkingDirectory=/opt/assessmentportal/backend
 EnvironmentFile=/etc/assessmentportal/assessmentportal.env
+Environment=HOME=/var/lib/assessmentportal
 ExecStart=/opt/assessmentportal/.venv/bin/python manage.py run_queued_assessments
 Restart=always
 RestartSec=10
