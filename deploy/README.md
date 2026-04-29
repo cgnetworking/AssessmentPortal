@@ -14,6 +14,12 @@ The script installs OS prerequisites, copies the app to `/opt/assessmentportal`,
 
 It does not start services while `/etc/assessmentportal/assessmentportal.env` still contains placeholder values.
 
+For non-production or private deployments where a trusted certificate is not available, the setup script can generate a self-signed certificate at the same paths used by the Nginx config:
+
+```bash
+sudo deploy/scripts/setup_ubuntu.sh --domain assessment.example.com --self-signed-cert
+```
+
 ## Packages
 
 Install OS packages:

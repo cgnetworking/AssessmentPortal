@@ -20,6 +20,46 @@ install_systemd_units() {
     systemctl daemon-reload
 }
 
+certificate_subject_alt_name() {
+    local host="${DOMAIN}"
+    host="${host#[}"
+    host="${host%]}"
+
+    if [[ "${host}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "${host}" == *:* ]]; then
+        printf 'IP:%s' "${host}"
+    else
+        printf 'DNS:%s' "${host}"
+    fi
+}
+
+generate_self_signed_certificate() {
+    local cert_dir="/etc/letsencrypt/live/${DOMAIN}"
+    local cert="${cert_dir}/fullchain.pem"
+    local cert_key="${cert_dir}/privkey.pem"
+    local san
+
+    if [[ "${GENERATE_SELF_SIGNED_CERT}" -eq 0 ]]; then
+        return
+    fi
+
+    if [[ -f "${cert}" && -f "${cert_key}" ]]; then
+        log "TLS certificate already exists at ${cert_dir}; leaving it unchanged."
+        return
+    fi
+
+    log "Generating self-signed TLS certificate for ${DOMAIN}."
+    san="$(certificate_subject_alt_name)"
+    install -d -m 0755 "${cert_dir}"
+    openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+        -keyout "${cert_key}" \
+        -out "${cert}" \
+        -subj "/CN=${DOMAIN}" \
+        -addext "subjectAltName=${san}"
+    chown root:root "${cert}" "${cert_key}"
+    chmod 0644 "${cert}"
+    chmod 0600 "${cert_key}"
+}
+
 configure_nginx() {
     if [[ "${CONFIGURE_NGINX}" -eq 0 ]]; then
         log "Skipping NGINX configuration."
@@ -36,6 +76,7 @@ configure_nginx() {
     sed "s|assessment.example.com|${DOMAIN}|g" "${INSTALL_DIR}/deploy/nginx/assessmentportal.conf" > "${tmp}"
     install -m 0644 "${tmp}" "${available}"
     rm -f "${tmp}"
+    generate_self_signed_certificate
 
     if [[ -f "${cert}" && -f "${cert_key}" ]]; then
         ln -sfn "${available}" "${enabled}"

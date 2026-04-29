@@ -19,6 +19,7 @@ BUILD_FRONTEND=1
 RUN_MIGRATIONS=1
 START_SERVICES=1
 CONFIGURE_NGINX=1
+GENERATE_SELF_SIGNED_CERT=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -86,6 +87,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-nginx)
             CONFIGURE_NGINX=0
+            shift
+            ;;
+        --self-signed-cert)
+            GENERATE_SELF_SIGNED_CERT=1
             shift
             ;;
         -h|--help)

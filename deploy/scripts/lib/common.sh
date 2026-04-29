@@ -17,6 +17,7 @@ Options:
   --skip-migrations             Do not run Django migrate/collectstatic.
   --skip-service-start           Install systemd units but do not enable/start them.
   --skip-nginx                  Do not install the NGINX site config.
+  --self-signed-cert            Generate a self-signed TLS certificate for the domain.
   -h, --help                    Show this help.
 
 Run this script from the repository checkout on Ubuntu 24.04 or newer.

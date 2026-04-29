@@ -9,6 +9,7 @@ install_base_packages() {
         curl \
         gnupg \
         nginx \
+        openssl \
         postgresql-client \
         python3-pip \
         python3.12 \
