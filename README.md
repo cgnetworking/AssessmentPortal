@@ -1,91 +1,105 @@
 # AssessmentPortal
 
+AssessmentPortal is a Django and React application for running Microsoft Zero Trust Assessment workflows, storing assessment history, and exposing results through a role-protected web portal.
+
+Deployment instructions live in [deployment.md](deployment.md).
+
 ## Application Structure
 
-- `backend/`: Django app and JSON API.
-- `frontend/`: React/Vite frontend.
+- `backend/`: Django application, API, authentication, authorization, persistence, and assessment worker orchestration.
+- `frontend/`: React/Vite browser application.
 - `modules/ZeroTrustAssessment/`: forked Microsoft Zero Trust Assessment PowerShell module.
+- `deploy/`: setup script, systemd units, Gunicorn config, Nginx config, and environment template.
 
-## Assessment Runtime Requirements
+## Architecture
 
-- The application and assessment worker will run only on Ubuntu 24.04 or newer.
-- The portal will run the Microsoft Zero Trust Assessment PowerShell module through a backend worker.
-- The forked module lives under `modules/ZeroTrustAssessment`.
-- The forked module uses Azure Database for PostgreSQL through the Ubuntu `psql` client and standard PostgreSQL environment variables populated by the worker.
-- Assessment results must be persisted to Azure Database for PostgreSQL.
-- The portal and worker will connect to Azure resources using managed identity.
-- The assessment worker expects `pwsh`, `psql`, the required Microsoft PowerShell service modules, and managed identity access to Key Vault and Azure Database for PostgreSQL.
+The production app has four main runtime pieces:
 
-## PostgreSQL Runtime
+- **Django API** stores tenant profiles, assessment runs, logs, results, report artifacts, and audit events.
+- **React frontend** is built into static assets served by Nginx.
+- **Assessment worker** runs queued assessments by launching the PowerShell Zero Trust Assessment module.
+- **Azure Database for PostgreSQL** is the only supported persistent database.
 
-The worker provides PostgreSQL connection metadata before invoking the module:
+Production deployment uses:
 
-- `PGHOST`, `PGDATABASE`, `PGUSER`, `PGPORT`, and `PGSSLMODE`.
-- `ZT_POSTGRES_SCHEMA` may be set to isolate an assessment run; otherwise the module uses the `main` schema.
-- The portal supports Azure Database for PostgreSQL with managed identity only. The PowerShell database engine acquires an Entra access token and exposes it as `PGPASSWORD` only while launching `psql`.
+- Gunicorn as the local Django web server.
+- Nginx as the public reverse proxy and static frontend server.
+- A separate systemd worker process for queued assessments.
+- Managed identity for Azure resource access.
 
-## Production Django Backend
+## Key Decisions
 
-The backend stores tenant profiles, assessment runs, run logs, results, and report artifacts in PostgreSQL.
+- The target host platform is Ubuntu 24.04 or newer.
+- PostgreSQL authentication uses Microsoft Entra managed identity only.
+- Static PostgreSQL passwords, `DATABASE_URL`, and `ZT_POSTGRES_CONNECTION_STRING` are intentionally unsupported.
+- The Django backend uses a custom PostgreSQL backend that injects a fresh managed identity token when opening database connections.
+- The PowerShell assessment module uses the Ubuntu `psql` client for PostgreSQL access.
+- The PowerShell database engine obtains the PostgreSQL managed identity token at `psql` launch time and exposes it as `PGPASSWORD` only for that child process.
+- Tenant assessment authentication uses app-only certificate authentication.
+- Certificate private keys must stay in Azure Key Vault. Django stores only certificate metadata and Key Vault URIs.
+- The assessment runner retrieves certificate material from Key Vault at run time with managed identity.
+- Password, delegated user, interactive browser, device code, client secret, and local certificate-store authentication paths are not supported for tenant assessments.
 
-Required production environment variables:
+## Data Model
 
-- `POSTGRES_HOST`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PORT`, defaults to `5432`
-- `POSTGRES_SSLMODE`, defaults to `require`
-- `AZUREAD_AUTH_CLIENT_ID`
-- `AZUREAD_AUTH_CLIENT_SECRET`
-- `AZUREAD_AUTH_TENANT_ID`
-- `FRONTEND_URL`, set to the public portal origin, such as `https://<host>`
-- `CSRF_TRUSTED_ORIGINS`, set to the public portal origin, such as `https://<host>`
+The backend persists:
 
-Do not configure `POSTGRES_PASSWORD`, `DATABASE_URL`, or `ZT_POSTGRES_CONNECTION_STRING`; static password and local database connection paths are intentionally unsupported.
+- Tenant profiles
+- Assessment runs
+- Run logs
+- Assessment results
+- Report artifacts
+- Immutable audit events
 
-The Microsoft Entra app registration redirect URI must be:
+Tenant profiles contain metadata required to run assessments, including tenant ID, app client ID, certificate thumbprint, Key Vault certificate URI, enabled connectors, and optional Exchange or SharePoint settings.
 
-```text
-https://<host>/auth/complete/azuread-tenant-oauth2/
-```
+## Authorization
 
-## Application Roles
+Users authenticate through Microsoft Entra ID and are authorized through Django groups.
 
-Users authenticate through Microsoft Entra ID, then must be manually assigned to one of these Django groups in the application after their first login:
+Supported groups:
 
 - `Portal Admin`
 - `Assessment Operator`
 - `Reader`
 
-Role permissions:
+Role capabilities are defined in `backend/assessments/roles.py`. Superusers are treated as `Portal Admin`.
 
-- `Portal Admin`: manage tenant profiles, configure Key Vault certificate references, delete tenants, run assessments, and view all results/logs.
-- `Assessment Operator`: view tenant profiles, run assessments, and view results/logs. Operators cannot edit certificate or tenant settings and cannot delete tenants.
-- `Reader`: view tenant profiles, run history, logs, and reports only.
+## Assessment Permissions
 
-The groups are created by Django migration. Assign users through Django admin after they first sign in and their user record exists.
+Assessments connect to Microsoft Graph and can optionally connect to Azure service APIs, depending on the enabled connectors.
 
-## Production Runtime
+When the underlying Zero Trust Assessment module connects through Microsoft Graph PowerShell, the Graph PowerShell app requests consent for the permissions required by the assessment. The consent prompt is displayed only if the Graph PowerShell app does not already have the required permissions.
 
-Production deployment uses:
+Required Microsoft Graph permissions:
 
-- Gunicorn as the local Django web server.
-- Nginx as the public reverse proxy.
-- Nginx serves the React build from `frontend/dist`.
-- Nginx proxies `/api/`, `/auth/`, and `/admin/` to Gunicorn through a Unix socket.
-- A separate systemd worker runs queued assessments.
+- `AuditLog.Read.All`
+- `CrossTenantInformation.ReadBasic.All`
+- `DeviceManagementApps.Read.All`
+- `DeviceManagementConfiguration.Read.All`
+- `DeviceManagementManagedDevices.Read.All`
+- `DeviceManagementRBAC.Read.All`
+- `DeviceManagementServiceConfig.Read.All`
+- `Directory.Read.All`
+- `DirectoryRecommendations.Read.All`
+- `EntitlementManagement.Read.All`
+- `IdentityRiskEvent.Read.All`
+- `IdentityRiskyUser.Read.All`
+- `Policy.Read.All`
+- `Policy.Read.ConditionalAccess`
+- `Policy.Read.PermissionGrant`
+- `PrivilegedAccess.Read.AzureAD`
+- `Reports.Read.All`
+- `RoleManagement.Read.All`
+- `UserAuthenticationMethod.Read.All`
+- `NetworkAccess.Read.All`
+- `IdentityRiskyServicePrincipal.Read.All`
 
-Deployment assets are in `deploy/`:
+## API Surface
 
-- `deploy/gunicorn/assessment_portal.py`
-- `deploy/nginx/assessmentportal.conf`
-- `deploy/systemd/assessmentportal-gunicorn.service`
-- `deploy/systemd/assessmentportal-worker.service`
-- `deploy/env/assessmentportal.env.example`
+The Django API is mounted under `/api/`.
 
-See `deploy/README.md` for the Ubuntu 24.04+ setup flow.
-
-## API Endpoints
+Primary endpoints:
 
 - `GET /api/health/`
 - `GET /api/auth/session/`
@@ -99,23 +113,8 @@ See `deploy/README.md` for the Ubuntu 24.04+ setup flow.
 - `GET /api/runs/?tenantProfileId=<tenant-id>`
 - `POST /api/runs/`
 - `GET /api/runs/<run-id>/`
+- `GET /api/audit-log/`
 
-## Tenant Authentication
+## Deployment
 
-Tenant assessment connections must use app-only certificate authentication only.
-
-- Certificate private keys must be stored in Azure Key Vault.
-- PostgreSQL must store certificate metadata only, such as tenant ID, client ID, thumbprint, and Key Vault certificate/secret URI.
-- The PowerShell runner must retrieve certificate material from Key Vault at run time using managed identity. Django passes only the Key Vault certificate/secret URI to the runner, not the PFX/private key material.
-- The preferred connector pattern is an in-memory `X509Certificate2` object passed with `-Certificate`.
-- Do not add password, delegated user, interactive browser, device code, client secret, or locally installed certificate-store auth paths.
-- Use certificate file paths or thumbprint auth only if a connector does not support in-memory certificate objects and the fallback is explicitly approved.
-
-The assessment connector bootstrap should use this pattern wherever supported:
-
-```powershell
-Connect-MgGraph -ClientId $ClientId -TenantId $TenantId -Certificate $Certificate
-Connect-ExchangeOnline -AppID $ClientId -Organization $Organization -Certificate $Certificate
-Connect-IPPSSession -AppID $ClientId -Organization $Organization -Certificate $Certificate
-Connect-SPOService -Url $AdminUrl -ClientId $ClientId -TenantId $TenantId -Certificate $Certificate
-```
+See [deployment.md](deployment.md) for operator setup steps, Azure prerequisites, environment configuration, service startup, verification, and first-login role assignment.
