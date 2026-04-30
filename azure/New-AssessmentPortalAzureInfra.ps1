@@ -10,11 +10,69 @@ param(
     [string] $Location = "eastus",
     [string] $NamePrefix = "assessmentportal",
     [string] $VNetName = "vnet-assessmentportal",
+    [string] $VNetAddressPrefix = "10.0.0.0/24",
+
+    [string] $AppSubnetName = "snet-app",
+    [string] $AppSubnetPrefix = "10.0.0.0/26",
+
+    [string] $PostgresSubnetName = "snet-postgres-pe",
+    [string] $PostgresSubnetPrefix = "10.0.0.64/26",
+
+    [string] $KeyVaultSubnetName = "snet-keyvault-pe",
+    [string] $KeyVaultSubnetPrefix = "10.0.0.128/26",
+
+    [string] $ReservedSubnetName = "snet-reserved",
+    [string] $ReservedSubnetPrefix = "10.0.0.192/26",
+
     [string] $PostgresServerName,
-    [string] $KeyVaultName,
+    [string] $PostgresDatabaseName = "assessment_portal",
+    [string] $PostgresVersion = "16",
+    [string] $PostgresSkuName = "Standard_B1ms",
+    [string] $PostgresSkuTier = "Burstable",
+    [int] $PostgresStorageSizeGB = 32,
+    [int] $PostgresBackupRetentionDays = 7,
+    [string] $PostgresActiveDirectoryAuth = "Enabled",
+    [string] $PostgresPasswordAuth = "Disabled",
+    [string] $PostgresPublicNetworkAccess = "Disabled",
+    [string] $PostgresGeoRedundantBackup = "Disabled",
+    [string] $PostgresHighAvailabilityMode = "Disabled",
+    [string] $PostgresStorageAutoGrow = "Disabled",
+    [string] $PostgresDatabaseCharset = "UTF8",
+    [string] $PostgresDatabaseCollation = "en_US.utf8",
 
     [Parameter(Mandatory)]
-    [securestring] $PostgresAdminPassword
+    [string] $PostgresEntraAdminObjectId,
+
+    [Parameter(Mandatory)]
+    [string] $PostgresEntraAdminName,
+
+    [string] $PostgresEntraAdminType = "Group",
+
+    [string] $KeyVaultName,
+    [string] $KeyVaultSku = "Standard",
+    [string] $KeyVaultPublicNetworkAccess = "Disabled",
+    [int] $KeyVaultSoftDeleteRetentionDays = 7,
+
+    [string] $PostgresPrivateDnsZoneName = "privatelink.postgres.database.azure.com",
+    [string] $KeyVaultPrivateDnsZoneName = "privatelink.vaultcore.azure.net",
+    [string] $PostgresPrivateDnsLinkName = "link-postgres",
+    [string] $KeyVaultPrivateDnsLinkName = "link-keyvault",
+    [string] $PrivateDnsZoneGroupName = "default",
+
+    [string] $PostgresPrivateEndpointName = "pe-postgres",
+    [string] $KeyVaultPrivateEndpointName = "pe-keyvault",
+    [string] $PostgresPrivateEndpointConnectionName = "psc-postgres",
+    [string] $KeyVaultPrivateEndpointConnectionName = "psc-keyvault",
+    [string] $PostgresPrivateEndpointGroupId = "postgresqlServer",
+    [string] $KeyVaultPrivateEndpointGroupId = "vault",
+    [string] $PostgresPrivateDnsConfigName = "postgres",
+    [string] $KeyVaultPrivateDnsConfigName = "keyvault",
+
+    [hashtable] $Tags = @{
+        application = "AssessmentPortal"
+        environment = "dev-test"
+        redundancy = "none"
+    }
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,51 +97,48 @@ if (-not $KeyVaultName) {
     }
 }
 
-$tags = @{
-    application = "AssessmentPortal"
-    environment = "dev-test"
-    redundancy = "none"
-}
-
 New-AzResourceGroup `
     -Name $ResourceGroupName `
     -Location $Location `
-    -Tag $tags `
+    -Tag $Tags `
     -Force | Out-Null
 
 $appSubnet = New-AzVirtualNetworkSubnetConfig `
-    -Name "snet-app" `
-    -AddressPrefix "10.0.0.0/26"
+    -Name $AppSubnetName `
+    -AddressPrefix $AppSubnetPrefix
 
 $postgresSubnet = New-AzVirtualNetworkSubnetConfig `
-    -Name "snet-postgres-pe" `
-    -AddressPrefix "10.0.0.64/26" `
+    -Name $PostgresSubnetName `
+    -AddressPrefix $PostgresSubnetPrefix `
     -PrivateEndpointNetworkPoliciesFlag Disabled
 
 $keyVaultSubnet = New-AzVirtualNetworkSubnetConfig `
-    -Name "snet-keyvault-pe" `
-    -AddressPrefix "10.0.0.128/26" `
+    -Name $KeyVaultSubnetName `
+    -AddressPrefix $KeyVaultSubnetPrefix `
     -PrivateEndpointNetworkPoliciesFlag Disabled
 
 $reservedSubnet = New-AzVirtualNetworkSubnetConfig `
-    -Name "snet-reserved" `
-    -AddressPrefix "10.0.0.192/26"
+    -Name $ReservedSubnetName `
+    -AddressPrefix $ReservedSubnetPrefix
 
 $vnet = New-AzVirtualNetwork `
     -Name $VNetName `
     -ResourceGroupName $ResourceGroupName `
     -Location $Location `
-    -AddressPrefix "10.0.0.0/24" `
+    -AddressPrefix $VNetAddressPrefix `
     -Subnet $appSubnet, $postgresSubnet, $keyVaultSubnet, $reservedSubnet `
-    -Tag $tags
+    -Tag $Tags
 
 $postgresTemplate = @{
     '$schema' = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
     contentVersion = "1.0.0.0"
     parameters = @{
         serverName = @{ type = "string" }
-        adminPassword = @{ type = "secureString" }
+        databaseName = @{ type = "string" }
         tenantId = @{ type = "string" }
+        entraAdminObjectId = @{ type = "string" }
+        entraAdminName = @{ type = "string" }
+        entraAdminType = @{ type = "string" }
     }
     resources = @(
         @{
@@ -91,46 +146,57 @@ $postgresTemplate = @{
             apiVersion = "2024-08-01"
             name = "[parameters('serverName')]"
             location = $Location
-            tags = $tags
+            tags = $Tags
             sku = @{
-                name = "Standard_B1ms"
-                tier = "Burstable"
+                name = $PostgresSkuName
+                tier = $PostgresSkuTier
             }
             properties = @{
-                version = "16"
-                administratorLogin = "pgadmin"
-                administratorLoginPassword = "[parameters('adminPassword')]"
+                version = $PostgresVersion
                 authConfig = @{
-                    activeDirectoryAuth = "Enabled"
-                    passwordAuth = "Enabled"
+                    activeDirectoryAuth = $PostgresActiveDirectoryAuth
+                    passwordAuth = $PostgresPasswordAuth
                     tenantId = "[parameters('tenantId')]"
                 }
                 backup = @{
-                    backupRetentionDays = 7
-                    geoRedundantBackup = "Disabled"
+                    backupRetentionDays = $PostgresBackupRetentionDays
+                    geoRedundantBackup = $PostgresGeoRedundantBackup
                 }
                 highAvailability = @{
-                    mode = "Disabled"
+                    mode = $PostgresHighAvailabilityMode
                 }
                 network = @{
-                    publicNetworkAccess = "Disabled"
+                    publicNetworkAccess = $PostgresPublicNetworkAccess
                 }
                 storage = @{
-                    autoGrow = "Disabled"
-                    storageSizeGB = 32
+                    autoGrow = $PostgresStorageAutoGrow
+                    storageSizeGB = $PostgresStorageSizeGB
                 }
+            }
+        }
+        @{
+            type = "Microsoft.DBforPostgreSQL/flexibleServers/administrators"
+            apiVersion = "2024-03-01-preview"
+            name = "[format('{0}/{1}', parameters('serverName'), parameters('entraAdminObjectId'))]"
+            dependsOn = @(
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+            )
+            properties = @{
+                principalName = "[parameters('entraAdminName')]"
+                principalType = "[parameters('entraAdminType')]"
+                tenantId = "[parameters('tenantId')]"
             }
         }
         @{
             type = "Microsoft.DBforPostgreSQL/flexibleServers/databases"
             apiVersion = "2024-08-01"
-            name = "[format('{0}/assessment_portal', parameters('serverName'))]"
+            name = "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]"
             dependsOn = @(
                 "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
             )
             properties = @{
-                charset = "UTF8"
-                collation = "en_US.utf8"
+                charset = $PostgresDatabaseCharset
+                collation = $PostgresDatabaseCollation
             }
         }
     )
@@ -141,8 +207,11 @@ New-AzResourceGroupDeployment `
     -ResourceGroupName $ResourceGroupName `
     -TemplateObject $postgresTemplate `
     -serverName $PostgresServerName `
-    -adminPassword $PostgresAdminPassword `
-    -tenantId $context.Tenant.Id | Out-Null
+    -databaseName $PostgresDatabaseName `
+    -tenantId $context.Tenant.Id `
+    -entraAdminObjectId $PostgresEntraAdminObjectId `
+    -entraAdminName $PostgresEntraAdminName `
+    -entraAdminType $PostgresEntraAdminType | Out-Null
 
 $postgres = Get-AzResource `
     -ResourceGroupName $ResourceGroupName `
@@ -153,82 +222,82 @@ $vault = New-AzKeyVault `
     -Name $KeyVaultName `
     -ResourceGroupName $ResourceGroupName `
     -Location $Location `
-    -Sku Standard `
-    -PublicNetworkAccess Disabled `
-    -SoftDeleteRetentionInDays 7 `
-    -Tag $tags
+    -Sku $KeyVaultSku `
+    -PublicNetworkAccess $KeyVaultPublicNetworkAccess `
+    -SoftDeleteRetentionInDays $KeyVaultSoftDeleteRetentionDays `
+    -Tag $Tags
 
 $postgresDnsZone = New-AzPrivateDnsZone `
     -ResourceGroupName $ResourceGroupName `
-    -Name "privatelink.postgres.database.azure.com" `
-    -Tag $tags
+    -Name $PostgresPrivateDnsZoneName `
+    -Tag $Tags
 
 New-AzPrivateDnsVirtualNetworkLink `
     -ResourceGroupName $ResourceGroupName `
     -ZoneName $postgresDnsZone.Name `
-    -Name "link-postgres" `
+    -Name $PostgresPrivateDnsLinkName `
     -VirtualNetworkId $vnet.Id `
-    -Tag $tags | Out-Null
+    -Tag $Tags | Out-Null
 
 $keyVaultDnsZone = New-AzPrivateDnsZone `
     -ResourceGroupName $ResourceGroupName `
-    -Name "privatelink.vaultcore.azure.net" `
-    -Tag $tags
+    -Name $KeyVaultPrivateDnsZoneName `
+    -Tag $Tags
 
 New-AzPrivateDnsVirtualNetworkLink `
     -ResourceGroupName $ResourceGroupName `
     -ZoneName $keyVaultDnsZone.Name `
-    -Name "link-keyvault" `
+    -Name $KeyVaultPrivateDnsLinkName `
     -VirtualNetworkId $vnet.Id `
-    -Tag $tags | Out-Null
+    -Tag $Tags | Out-Null
 
 $postgresPeConnection = New-AzPrivateLinkServiceConnection `
-    -Name "psc-postgres" `
+    -Name $PostgresPrivateEndpointConnectionName `
     -PrivateLinkServiceId $postgres.ResourceId `
-    -GroupId "postgresqlServer"
+    -GroupId $PostgresPrivateEndpointGroupId
 
 $postgresPe = New-AzPrivateEndpoint `
-    -Name "pe-postgres" `
+    -Name $PostgresPrivateEndpointName `
     -ResourceGroupName $ResourceGroupName `
     -Location $Location `
-    -Subnet ($vnet.Subnets | Where-Object Name -eq "snet-postgres-pe") `
+    -Subnet ($vnet.Subnets | Where-Object Name -eq $PostgresSubnetName) `
     -PrivateLinkServiceConnection $postgresPeConnection `
-    -Tag $tags `
+    -Tag $Tags `
     -Force
 
 $postgresDnsConfig = New-AzPrivateDnsZoneConfig `
-    -Name "postgres" `
+    -Name $PostgresPrivateDnsConfigName `
     -PrivateDnsZoneId $postgresDnsZone.ResourceId
 
 New-AzPrivateDnsZoneGroup `
     -ResourceGroupName $ResourceGroupName `
     -PrivateEndpointName $postgresPe.Name `
-    -Name "default" `
+    -Name $PrivateDnsZoneGroupName `
     -PrivateDnsZoneConfig $postgresDnsConfig `
     -Force | Out-Null
 
 $keyVaultPeConnection = New-AzPrivateLinkServiceConnection `
-    -Name "psc-keyvault" `
+    -Name $KeyVaultPrivateEndpointConnectionName `
     -PrivateLinkServiceId $vault.ResourceId `
-    -GroupId "vault"
+    -GroupId $KeyVaultPrivateEndpointGroupId
 
 $keyVaultPe = New-AzPrivateEndpoint `
-    -Name "pe-keyvault" `
+    -Name $KeyVaultPrivateEndpointName `
     -ResourceGroupName $ResourceGroupName `
     -Location $Location `
-    -Subnet ($vnet.Subnets | Where-Object Name -eq "snet-keyvault-pe") `
+    -Subnet ($vnet.Subnets | Where-Object Name -eq $KeyVaultSubnetName) `
     -PrivateLinkServiceConnection $keyVaultPeConnection `
-    -Tag $tags `
+    -Tag $Tags `
     -Force
 
 $keyVaultDnsConfig = New-AzPrivateDnsZoneConfig `
-    -Name "keyvault" `
+    -Name $KeyVaultPrivateDnsConfigName `
     -PrivateDnsZoneId $keyVaultDnsZone.ResourceId
 
 New-AzPrivateDnsZoneGroup `
     -ResourceGroupName $ResourceGroupName `
     -PrivateEndpointName $keyVaultPe.Name `
-    -Name "default" `
+    -Name $PrivateDnsZoneGroupName `
     -PrivateDnsZoneConfig $keyVaultDnsConfig `
     -Force | Out-Null
 
@@ -237,7 +306,7 @@ New-AzPrivateDnsZoneGroup `
     VNetName = $VNetName
     PostgresServerName = $PostgresServerName
     PostgresHost = "$PostgresServerName.postgres.database.azure.com"
-    PostgresDatabase = "assessment_portal"
+    PostgresDatabase = $PostgresDatabaseName
     KeyVaultName = $KeyVaultName
     KeyVaultUri = $vault.VaultUri
 }
