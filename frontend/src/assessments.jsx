@@ -52,7 +52,8 @@ function App() {
   }, [auth.authenticated]);
 
   async function logoutUser() {
-    await logout();
+    const result = await logout();
+    if (!result.ok) return;
     setSummary(null);
     setTenants([]);
     setRuns([]);
@@ -85,16 +86,20 @@ function App() {
     event.preventDefault();
     if (!canManageTenants) return;
     setError("");
-    const payload = JSON.stringify(form);
-    if (selectedTenant) {
-      const data = await api(`/tenants/${selectedTenant.id}/`, { method: "PATCH", body: payload });
-      setTenants((items) => items.map((item) => (item.id === data.tenant.id ? data.tenant : item)));
-    } else {
-      const data = await api("/tenants/", { method: "POST", body: payload });
-      setTenants((items) => [...items, data.tenant]);
-      setSelectedTenantId(data.tenant.id);
+    try {
+      const payload = JSON.stringify(form);
+      if (selectedTenant) {
+        const data = await api(`/tenants/${selectedTenant.id}/`, { method: "PATCH", body: payload });
+        setTenants((items) => items.map((item) => (item.id === data.tenant.id ? data.tenant : item)));
+      } else {
+        const data = await api("/tenants/", { method: "POST", body: payload });
+        setTenants((items) => [...items, data.tenant]);
+        setSelectedTenantId(data.tenant.id);
+      }
+      await refresh();
+    } catch (err) {
+      setError(errorMessage(err, "Unable to save tenant profile."));
     }
-    await refresh();
   }
 
   async function createNewTenant() {
@@ -107,13 +112,18 @@ function App() {
 
   async function runAssessment() {
     if (!selectedTenant || !canRunAssessments) return;
-    const data = await api("/runs/", {
-      method: "POST",
-      body: JSON.stringify({ tenantProfileId: selectedTenant.id })
-    });
-    setRuns((items) => [data.run, ...items]);
-    setSelectedRun(data.run);
-    await refresh();
+    setError("");
+    try {
+      const data = await api("/runs/", {
+        method: "POST",
+        body: JSON.stringify({ tenantProfileId: selectedTenant.id })
+      });
+      setRuns((items) => [data.run, ...items]);
+      setSelectedRun(data.run);
+      await refresh();
+    } catch (err) {
+      setError(errorMessage(err, "Unable to run assessment. Please try again."));
+    }
   }
 
   async function cancelAssessment(run) {
@@ -204,8 +214,14 @@ function App() {
 
   async function loadRun(run) {
     if (!canViewResults) return;
-    const data = await api(`/runs/${run.id}/`);
-    setSelectedRun({ ...data.run, logs: data.logs, results: data.results });
+    setError("");
+    try {
+      const data = await api(`/runs/${run.id}/`);
+      setSelectedRun({ ...data.run, logs: data.logs, results: data.results });
+    } catch (err) {
+      setSelectedRun(null);
+      setError(errorMessage(err, "Unable to open assessment run. Please try again."));
+    }
   }
 
   function updateField(field, value) {
@@ -358,6 +374,21 @@ function ReadOnlyField({ label, value }) {
       <input type="text" value={value} disabled readOnly />
     </label>
   );
+}
+
+function errorMessage(err, fallback) {
+  const fieldErrors = err?.payload?.errors;
+  if (fieldErrors && typeof fieldErrors === "object") {
+    const messages = Object.entries(fieldErrors)
+      .flatMap(([field, value]) => {
+        const values = Array.isArray(value) ? value : [value];
+        return values.filter(Boolean).map((message) => `${field}: ${message}`);
+      });
+    if (messages.length > 0) {
+      return messages.join(" ");
+    }
+  }
+  return err?.payload?.detail || err?.message || fallback;
 }
 
 function formatDate(value) {

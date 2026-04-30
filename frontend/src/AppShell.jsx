@@ -119,6 +119,7 @@ export function AppShell({
 
           {!requireAuth || auth.authenticated ? (
             <>
+              {auth.error ? <div className="error-banner">{auth.error}</div> : null}
               {title && requireAuth ? (
                 <section className={["hero", heroClassName].filter(Boolean).join(" ")}>
                   <div>

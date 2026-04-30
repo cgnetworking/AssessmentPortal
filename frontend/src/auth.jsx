@@ -7,6 +7,10 @@ function signedOutAuth(loginUrl = DEFAULT_LOGIN_URL) {
   return { loading: false, authenticated: false, loginUrl };
 }
 
+function authErrorMessage(err, fallback) {
+  return err?.payload?.detail || err?.message || fallback;
+}
+
 export function useAuth() {
   const [auth, setAuth] = useState({ loading: true, authenticated: false, loginUrl: DEFAULT_LOGIN_URL });
 
@@ -33,8 +37,15 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    await api("/auth/logout/", { method: "POST", body: "{}" });
-    setAuth(signedOutAuth());
+    try {
+      await api("/auth/logout/", { method: "POST", body: "{}" });
+      setAuth(signedOutAuth());
+      return { ok: true };
+    } catch (err) {
+      const error = authErrorMessage(err, "Unable to sign out. Please try again.");
+      setAuth((current) => ({ ...current, loading: false, error }));
+      return { ok: false, error };
+    }
   }, []);
 
   const permissions = useMemo(() => auth.user?.permissions || [], [auth.user]);

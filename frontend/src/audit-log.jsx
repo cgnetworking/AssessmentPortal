@@ -21,7 +21,8 @@ function AuditLogApp() {
   }, [auth.authenticated]);
 
   async function logoutUser() {
-    await logout();
+    const result = await logout();
+    if (!result.ok) return;
     setEvents([]);
   }
 
