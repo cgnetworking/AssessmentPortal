@@ -1,5 +1,6 @@
 #Requires -Modules Az.Accounts, Az.Resources, Az.Network, Az.KeyVault, Az.PrivateDns
 
+# Change deployment inputs here or pass them as parameters when running the script.
 [CmdletBinding()]
 param(
     [string] $SubscriptionId,
@@ -77,6 +78,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Use the requested subscription, or the caller's current Azure context.
 if ($SubscriptionId) {
     Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
 }
@@ -86,6 +88,7 @@ if (-not $context) {
     throw "Run Connect-AzAccount before this script."
 }
 
+# Generate globally unique names when the caller does not provide them.
 $suffix = Get-Random -Minimum 10000 -Maximum 99999
 if (-not $PostgresServerName) {
     $PostgresServerName = "$NamePrefix-pg-$suffix".ToLowerInvariant()
@@ -97,12 +100,14 @@ if (-not $KeyVaultName) {
     }
 }
 
+# Create the resource group that will hold the dev/test infrastructure.
 New-AzResourceGroup `
     -Name $ResourceGroupName `
     -Location $Location `
     -Tag $Tags `
     -Force | Out-Null
 
+# Split 10.0.0.0/24 into four equal /26 subnets.
 $appSubnet = New-AzVirtualNetworkSubnetConfig `
     -Name $AppSubnetName `
     -AddressPrefix $AppSubnetPrefix
@@ -121,6 +126,7 @@ $reservedSubnet = New-AzVirtualNetworkSubnetConfig `
     -Name $ReservedSubnetName `
     -AddressPrefix $ReservedSubnetPrefix
 
+# Create the VNet used by the app host and both private endpoints.
 $vnet = New-AzVirtualNetwork `
     -Name $VNetName `
     -ResourceGroupName $ResourceGroupName `
@@ -129,6 +135,8 @@ $vnet = New-AzVirtualNetwork `
     -Subnet $appSubnet, $postgresSubnet, $keyVaultSubnet, $reservedSubnet `
     -Tag $Tags
 
+# Deploy PostgreSQL Flexible Server through ARM because the Az cmdlet does not
+# expose every auth/network flag consistently across Az module versions.
 $postgresTemplate = @{
     '$schema' = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
     contentVersion = "1.0.0.0"
@@ -153,6 +161,7 @@ $postgresTemplate = @{
             }
             properties = @{
                 version = $PostgresVersion
+                # Entra-only auth: no PostgreSQL password administrator is created.
                 authConfig = @{
                     activeDirectoryAuth = $PostgresActiveDirectoryAuth
                     passwordAuth = $PostgresPasswordAuth
@@ -177,6 +186,7 @@ $postgresTemplate = @{
         @{
             type = "Microsoft.DBforPostgreSQL/flexibleServers/administrators"
             apiVersion = "2024-03-01-preview"
+            # The initial Entra admin can be a user, group, service principal, or managed identity.
             name = "[format('{0}/{1}', parameters('serverName'), parameters('entraAdminObjectId'))]"
             dependsOn = @(
                 "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
@@ -202,6 +212,7 @@ $postgresTemplate = @{
     )
 }
 
+# Create the PostgreSQL server, database, and initial Entra administrator.
 New-AzResourceGroupDeployment `
     -Name "postgres-$suffix" `
     -ResourceGroupName $ResourceGroupName `
@@ -213,11 +224,13 @@ New-AzResourceGroupDeployment `
     -entraAdminName $PostgresEntraAdminName `
     -entraAdminType $PostgresEntraAdminType | Out-Null
 
+# Fetch the PostgreSQL resource ID for the private endpoint connection.
 $postgres = Get-AzResource `
     -ResourceGroupName $ResourceGroupName `
     -ResourceType "Microsoft.DBforPostgreSQL/flexibleServers" `
     -Name $PostgresServerName
 
+# Create the Key Vault used by the app for tenant certificate material.
 $vault = New-AzKeyVault `
     -Name $KeyVaultName `
     -ResourceGroupName $ResourceGroupName `
@@ -227,6 +240,7 @@ $vault = New-AzKeyVault `
     -SoftDeleteRetentionInDays $KeyVaultSoftDeleteRetentionDays `
     -Tag $Tags
 
+# Create private DNS zones and link them to this VNet.
 $postgresDnsZone = New-AzPrivateDnsZone `
     -ResourceGroupName $ResourceGroupName `
     -Name $PostgresPrivateDnsZoneName `
@@ -251,6 +265,7 @@ New-AzPrivateDnsVirtualNetworkLink `
     -VirtualNetworkId $vnet.Id `
     -Tag $Tags | Out-Null
 
+# Create the PostgreSQL private endpoint and attach it to private DNS.
 $postgresPeConnection = New-AzPrivateLinkServiceConnection `
     -Name $PostgresPrivateEndpointConnectionName `
     -PrivateLinkServiceId $postgres.ResourceId `
@@ -276,6 +291,7 @@ New-AzPrivateDnsZoneGroup `
     -PrivateDnsZoneConfig $postgresDnsConfig `
     -Force | Out-Null
 
+# Create the Key Vault private endpoint and attach it to private DNS.
 $keyVaultPeConnection = New-AzPrivateLinkServiceConnection `
     -Name $KeyVaultPrivateEndpointConnectionName `
     -PrivateLinkServiceId $vault.ResourceId `
@@ -301,6 +317,7 @@ New-AzPrivateDnsZoneGroup `
     -PrivateDnsZoneConfig $keyVaultDnsConfig `
     -Force | Out-Null
 
+# Return the values the app host needs for environment configuration.
 [pscustomobject]@{
     ResourceGroupName = $ResourceGroupName
     VNetName = $VNetName
