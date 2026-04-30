@@ -15,7 +15,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .audit import audit_metadata_diff, record_audit_event, tenant_audit_snapshot
 from .models import AssessmentRun, AuditEvent, ReportArtifact, TenantProfile
 from .redaction import redact_sensitive_text
-from .roles import require_permission, user_permissions, user_roles
+from .roles import is_portal_admin, require_permission, user_permissions, user_roles
 from .serializers import audit_event_to_dict, log_to_dict, run_to_dict, tenant_to_dict
 from .services.certificates import create_certificate_for_tenant, get_public_certificate_der
 
@@ -354,22 +354,22 @@ def run_collection(request):
 @require_permission("viewResults")
 def run_detail(request, run_id):
     run = get_object_or_404(AssessmentRun, id=run_id)
-    logs = list(run.logs.order_by("-created_at", "-id")[:RUN_DETAIL_LOG_LIMIT])
-    logs.reverse()
     record_audit_event(
         request=request,
         action=AuditEvent.Action.RUN_VIEWED,
         target=run,
         metadata={"tenantProfileId": str(run.tenant_profile_id), "status": run.status},
     )
-    return JsonResponse(
-        {
-            "run": run_to_dict(run),
-            "logs": [log_to_dict(log) for log in logs],
-            "logsTruncated": run.logs.count() > RUN_DETAIL_LOG_LIMIT,
-            "results": list(run.results.values("test_id", "pillar", "name", "status", "risk", "recommendation", "evidence")),
-        }
-    )
+    payload = {
+        "run": run_to_dict(run),
+        "results": list(run.results.values("test_id", "pillar", "name", "status", "risk", "recommendation", "evidence")),
+    }
+    if is_portal_admin(request.user):
+        logs = list(run.logs.order_by("-created_at", "-id")[:RUN_DETAIL_LOG_LIMIT])
+        logs.reverse()
+        payload["logs"] = [log_to_dict(log) for log in logs]
+        payload["logsTruncated"] = run.logs.count() > RUN_DETAIL_LOG_LIMIT
+    return JsonResponse(payload)
 
 
 @require_auth

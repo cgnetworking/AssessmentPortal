@@ -44,6 +44,10 @@ def user_permissions(user):
     return sorted(permissions)
 
 
+def is_portal_admin(user):
+    return PORTAL_ADMIN in user_roles(user)
+
+
 def has_permission(user, permission):
     return permission in user_permissions(user)
 
