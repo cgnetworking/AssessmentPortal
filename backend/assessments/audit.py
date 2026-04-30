@@ -4,10 +4,7 @@ from .models import AssessmentRun, AuditEvent, TenantProfile
 
 
 def client_ip_from_request(request):
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR") or None
+    return request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR") or None
 
 
 def request_user_agent(request):

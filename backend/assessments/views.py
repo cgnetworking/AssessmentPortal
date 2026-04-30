@@ -17,10 +17,24 @@ from .serializers import audit_event_to_dict, log_to_dict, run_to_dict, tenant_t
 from .services.certificates import create_certificate_for_tenant, get_public_certificate_der
 
 
+class BadJsonBody(ValueError):
+    pass
+
+
 def parse_json(request):
     if not request.body:
         return {}
-    return json.loads(request.body.decode("utf-8"))
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BadJsonBody("Request body must be valid JSON.") from exc
+    if not isinstance(data, dict):
+        raise BadJsonBody("Request body must be a JSON object.")
+    return data
+
+
+def bad_json_response(exc):
+    return JsonResponse({"detail": str(exc)}, status=400)
 
 
 def validation_error_response(exc):
@@ -111,7 +125,10 @@ def tenant_collection(request):
     if request.method == "POST":
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
-        data = parse_json(request)
+        try:
+            data = parse_json(request)
+        except BadJsonBody as exc:
+            return bad_json_response(exc)
         if "keyVaultCertificateUri" in data:
             return JsonResponse({"detail": "Key Vault certificate URI is managed by the server from ZTA_KEY_VAULT_URL."}, status=400)
         try:
@@ -151,7 +168,10 @@ def tenant_detail(request, tenant_id):
     if request.method in {"PUT", "PATCH"}:
         if "manageTenantProfiles" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "manageTenantProfiles"}, status=403)
-        data = parse_json(request)
+        try:
+            data = parse_json(request)
+        except BadJsonBody as exc:
+            return bad_json_response(exc)
         if "keyVaultCertificateUri" in data:
             return JsonResponse({"detail": "Key Vault certificate URI is managed by the server from ZTA_KEY_VAULT_URL."}, status=400)
         before = tenant_audit_snapshot(tenant)
@@ -265,7 +285,10 @@ def run_collection(request):
     if request.method == "POST":
         if "runAssessments" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "runAssessments"}, status=403)
-        data = parse_json(request)
+        try:
+            data = parse_json(request)
+        except BadJsonBody as exc:
+            return bad_json_response(exc)
         tenant = get_object_or_404(TenantProfile, id=data.get("tenantProfileId"))
         run = AssessmentRun.objects.create(tenant_profile=tenant, pillar=data.get("pillar", "All"))
         record_audit_event(
