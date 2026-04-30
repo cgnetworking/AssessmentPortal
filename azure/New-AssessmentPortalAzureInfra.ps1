@@ -5,7 +5,6 @@
 param(
     [string] $SubscriptionId,
 
-    [Parameter(Mandatory)]
     [string] $ResourceGroupName,
 
     [string] $Location = "eastus",
@@ -16,10 +15,10 @@ param(
     [string] $AppSubnetName = "snet-app",
     [string] $AppSubnetPrefix = "10.0.0.0/26",
 
-    [string] $PostgresSubnetName = "snet-postgres-pe",
+    [string] $PostgresSubnetName = "snet-psqldb-pe",
     [string] $PostgresSubnetPrefix = "10.0.0.64/26",
 
-    [string] $KeyVaultSubnetName = "snet-keyvault-pe",
+    [string] $KeyVaultSubnetName = "snet-kv-pe",
     [string] $KeyVaultSubnetPrefix = "10.0.0.128/26",
 
     [string] $ReservedSubnetName = "snet-reserved",
@@ -60,10 +59,10 @@ param(
     [string] $KeyVaultPrivateDnsLinkName = "link-keyvault",
     [string] $PrivateDnsZoneGroupName = "default",
 
-    [string] $PostgresPrivateEndpointName = "pe-postgres",
-    [string] $KeyVaultPrivateEndpointName = "pe-keyvault",
-    [string] $PostgresPrivateEndpointConnectionName = "psc-postgres",
-    [string] $KeyVaultPrivateEndpointConnectionName = "psc-keyvault",
+    [string] $PostgresPrivateEndpointName = "pep-psqldb-assessmentportal",
+    [string] $KeyVaultPrivateEndpointName = "pep-kv-assessmentportal",
+    [string] $PostgresPrivateEndpointConnectionName = "psc-psqldb-assessmentportal",
+    [string] $KeyVaultPrivateEndpointConnectionName = "psc-kv-assessmentportal",
     [string] $PostgresPrivateEndpointGroupId = "postgresqlServer",
     [string] $KeyVaultPrivateEndpointGroupId = "vault",
     [string] $PostgresPrivateDnsConfigName = "postgres",
@@ -90,14 +89,18 @@ if (-not $context) {
 
 # Generate globally unique names when the caller does not provide them.
 $suffix = Get-Random -Minimum 10000 -Maximum 99999
+if (-not $ResourceGroupName) {
+    $ResourceGroupName = "rg-$NamePrefix-dev"
+}
 if (-not $PostgresServerName) {
-    $PostgresServerName = "$NamePrefix-pg-$suffix".ToLowerInvariant()
+    $PostgresServerName = "psqldb-$NamePrefix-$suffix".ToLowerInvariant()
 }
 if (-not $KeyVaultName) {
-    $KeyVaultName = "$($NamePrefix -replace '[^a-zA-Z0-9]', '')kv$suffix".ToLowerInvariant()
+    $KeyVaultName = "kv-$($NamePrefix -replace '[^a-zA-Z0-9-]', '')-$suffix".ToLowerInvariant()
     if ($KeyVaultName.Length -gt 24) {
         $KeyVaultName = $KeyVaultName.Substring(0, 24)
     }
+    $KeyVaultName = $KeyVaultName.Trim("-")
 }
 
 # Create the resource group that will hold the dev/test infrastructure.
