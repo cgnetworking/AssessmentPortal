@@ -11,7 +11,7 @@ build_frontend() {
     if [[ -f package-lock.json ]]; then
         runuser -u "${APP_USER}" -- npm ci
     else
-        runuser -u "${APP_USER}" -- npm install
+        runuser -u "${APP_USER}" -- npm install --no-package-lock
     fi
     runuser -u "${APP_USER}" -- npm run build
     popd >/dev/null

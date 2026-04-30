@@ -11,9 +11,10 @@ ensure_users_and_directories() {
         useradd --system --gid "${APP_GROUP}" --home-dir "${DATA_DIR}" --create-home --shell /usr/sbin/nologin "${APP_USER}"
     fi
 
-    mkdir -p "${INSTALL_DIR}" "${ENV_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
+    install -d -m 0755 -o root -g root "${INSTALL_DIR}" "${ENV_DIR}"
+    install -d -m 0750 -o "${APP_USER}" -g "${APP_GROUP}" "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
     chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
-    chmod 0750 "${DATA_DIR}"
+    chmod 0750 "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
 }
 
 copy_application_files() {
@@ -25,7 +26,33 @@ copy_application_files() {
         --exclude 'frontend/dist/' \
         --exclude 'backend/staticfiles/' \
         "${REPO_ROOT}/" "${INSTALL_DIR}/"
-    chown -R "${APP_USER}:${APP_GROUP}" "${INSTALL_DIR}"
+    lock_application_files
+}
+
+prepare_build_write_paths() {
+    log "Preparing application build output directories."
+
+    install -d -m 0750 -o "${APP_USER}" -g "${APP_GROUP}" \
+        "${INSTALL_DIR}/.venv" \
+        "${INSTALL_DIR}/frontend" \
+        "${INSTALL_DIR}/frontend/node_modules" \
+        "${INSTALL_DIR}/frontend/dist" \
+        "${INSTALL_DIR}/backend/staticfiles"
+    chown -R "${APP_USER}:${APP_GROUP}" \
+        "${INSTALL_DIR}/.venv" \
+        "${INSTALL_DIR}/frontend" \
+        "${INSTALL_DIR}/backend/staticfiles"
+}
+
+lock_application_files() {
+    log "Locking deployed application files to root ownership."
+
+    chown -R root:root "${INSTALL_DIR}"
+    find "${INSTALL_DIR}" -type d -exec chmod u=rwx,go=rx {} +
+    find "${INSTALL_DIR}" -type f -perm /111 -exec chmod u=rwx,go=rx {} +
+    find "${INSTALL_DIR}" -type f ! -perm /111 -exec chmod u=rw,go=r {} +
+    chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
+    chmod 0750 "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
 }
 
 validate_no_duckdb_files() {

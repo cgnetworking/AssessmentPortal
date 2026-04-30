@@ -43,7 +43,8 @@ class PowerShellAssessmentRunner:
 
         run.status = AssessmentRun.Status.RUNNING
         run.started_at = timezone.now()
-        run.save(update_fields=["status", "started_at", "updated_at"])
+        if not self._mark_running_if_not_cancelled(run):
+            return run
 
         try:
             with tempfile.TemporaryDirectory(prefix=f"assessment-{run.id}-", dir=work_root) as output_dir_name:
@@ -85,7 +86,7 @@ class PowerShellAssessmentRunner:
                 else:
                     run.status = AssessmentRun.Status.FAILED
                     run.error_message = f"PowerShell assessment exited with code {exit_code}"
-            run.save()
+            self._save_completion_if_not_cancelled(run)
             return run
         except Exception as exc:
             run.completed_at = timezone.now()
@@ -95,7 +96,7 @@ class PowerShellAssessmentRunner:
             else:
                 run.status = AssessmentRun.Status.FAILED
                 run.error_message = str(exc)
-            run.save()
+            self._save_completion_if_not_cancelled(run)
             RunLog.objects.create(run=run, stream="stderr", message=str(exc))
             return run
 
@@ -153,6 +154,44 @@ class PowerShellAssessmentRunner:
 
     def _is_cancelled(self, run):
         return AssessmentRun.objects.filter(pk=run.pk, status=AssessmentRun.Status.CANCELLED).exists()
+
+    def _mark_running_if_not_cancelled(self, run):
+        updated_at = timezone.now()
+        updated = (
+            AssessmentRun.objects.filter(pk=run.pk)
+            .exclude(status=AssessmentRun.Status.CANCELLED)
+            .update(
+                status=AssessmentRun.Status.RUNNING,
+                started_at=run.started_at,
+                updated_at=updated_at,
+            )
+        )
+        if updated:
+            run.updated_at = updated_at
+            return True
+
+        run.refresh_from_db(fields=["status", "started_at", "completed_at", "error_message", "updated_at"])
+        return False
+
+    def _save_completion_if_not_cancelled(self, run):
+        updated_at = timezone.now()
+        updated = (
+            AssessmentRun.objects.filter(pk=run.pk)
+            .exclude(status=AssessmentRun.Status.CANCELLED)
+            .update(
+                status=run.status,
+                completed_at=run.completed_at,
+                exit_code=run.exit_code,
+                error_message=run.error_message,
+                updated_at=updated_at,
+            )
+        )
+        if updated:
+            run.updated_at = updated_at
+            return True
+
+        run.refresh_from_db(fields=["status", "completed_at", "exit_code", "error_message", "updated_at"])
+        return False
 
     def _build_environment(self, run, output_dir):
         tenant = run.tenant_profile

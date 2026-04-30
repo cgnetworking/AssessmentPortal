@@ -29,6 +29,9 @@ function Get-ZtManagedIdentityToken {
 
         $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{
             'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER
+        } -TimeoutSec 10 -ErrorAction Stop
+        if (-not $response.access_token) {
+            throw 'Managed identity token response did not include an access token.'
         }
         return $response.access_token
     }
@@ -38,7 +41,10 @@ function Get-ZtManagedIdentityToken {
         $uri = "$uri&client_id=$([uri]::EscapeDataString($managedIdentityClientId))"
     }
 
-    $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{ Metadata = 'true' } -TimeoutSec 10
+    $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{ Metadata = 'true' } -TimeoutSec 10 -ErrorAction Stop
+    if (-not $response.access_token) {
+        throw 'Managed identity token response did not include an access token.'
+    }
     return $response.access_token
 }
 
@@ -79,7 +85,7 @@ function Get-ZtCertificateFromKeyVault {
     $secretUri = Resolve-ZtKeyVaultSecretUri -CertificateUri $CertificateUri
     $secret = Invoke-RestMethod -Method GET -Uri $secretUri -Headers @{
         Authorization = "Bearer $token"
-    }
+    } -TimeoutSec 30 -ErrorAction Stop
 
     if (-not $secret.value) {
         throw 'Key Vault certificate secret did not contain a PFX value.'

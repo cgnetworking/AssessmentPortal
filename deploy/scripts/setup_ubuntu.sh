@@ -39,6 +39,16 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=deploy/scripts/lib/config.sh
 . "${SCRIPT_DIR}/lib/config.sh"
 
+LOCK_APPLICATION_ON_EXIT=0
+
+cleanup_application_lock() {
+    if [[ "${LOCK_APPLICATION_ON_EXIT}" -eq 1 && -d "${INSTALL_DIR}" && -d "${DATA_DIR}" ]]; then
+        lock_application_files || true
+    fi
+}
+
+trap cleanup_application_lock EXIT
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --domain)
@@ -114,12 +124,16 @@ main() {
     install_powershell_package
     ensure_users_and_directories
     copy_application_files
+    LOCK_APPLICATION_ON_EXIT=1
     validate_no_duckdb_files
+    prepare_build_write_paths
     create_python_environment
     build_frontend
     write_environment_file
     install_powershell_dependencies
     run_django_setup
+    lock_application_files
+    LOCK_APPLICATION_ON_EXIT=0
     install_systemd_units
     configure_nginx
     start_services
