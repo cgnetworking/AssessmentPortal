@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { api } from "./api.js";
+import { AppShell } from "./AppShell.jsx";
+import { useAuth } from "./auth.jsx";
 import "./styles.css";
 
 const emptyTenant = {
@@ -10,49 +13,8 @@ const emptyTenant = {
 };
 const guidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 
-function getCookie(name) {
-  return document.cookie
-    .split(";")
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-    ?.slice(name.length + 1) || "";
-}
-
-async function api(path, options = {}) {
-  const { headers: optionHeaders, ...fetchOptions } = options;
-  const method = (options.method || "GET").toUpperCase();
-  const headers = {
-    "Content-Type": "application/json",
-    ...(optionHeaders || {})
-  };
-
-  if (!["GET", "HEAD", "OPTIONS", "TRACE"].includes(method)) {
-    headers["X-CSRFToken"] = decodeURIComponent(getCookie("csrftoken"));
-  }
-
-  const response = await fetch(`/api${path}`, {
-    credentials: "include",
-    headers,
-    ...fetchOptions
-  });
-  if (!response.ok) {
-    const error = new Error(`API request failed: ${response.status}`);
-    error.status = response.status;
-    try {
-      error.payload = await response.json();
-    } catch {
-      error.payload = {};
-    }
-    throw error;
-  }
-  if (response.status === 204) {
-    return {};
-  }
-  return response.json();
-}
-
 function App() {
-  const [auth, setAuth] = useState({ loading: true, authenticated: false, loginUrl: "/auth/login/azuread-tenant-oauth2/" });
+  const { auth, logout, permissions } = useAuth();
   const [summary, setSummary] = useState(null);
   const [tenants, setTenants] = useState([]);
   const [selectedTenantId, setSelectedTenantId] = useState(null);
@@ -67,7 +29,6 @@ function App() {
     () => tenants.find((tenant) => tenant.id === selectedTenantId) || null,
     [tenants, selectedTenantId]
   );
-  const permissions = auth.user?.permissions || [];
   const canManageTenants = permissions.includes("manageTenantProfiles");
   const canConfigureKeyVaultCertificates = permissions.includes("configureKeyVaultCertificates");
   const canDeleteTenants = permissions.includes("deleteTenants");
@@ -85,24 +46,13 @@ function App() {
   }
 
   useEffect(() => {
-    api("/auth/session/")
-      .then((data) => {
-        setAuth({ loading: false, authenticated: true, user: data.user, loginUrl: "/auth/login/azuread-tenant-oauth2/" });
-        return refresh();
-      })
-      .catch((err) => {
-        if (err.status === 401) {
-          setAuth({ loading: false, authenticated: false, loginUrl: err.payload?.loginUrl || "/auth/login/azuread-tenant-oauth2/" });
-          return;
-        }
-        setAuth((current) => ({ ...current, loading: false }));
-        setError(err.message);
-      });
-  }, []);
+    if (!auth.authenticated) return;
+
+    refresh().catch((err) => setError(err.payload?.detail || err.message));
+  }, [auth.authenticated]);
 
   async function logoutUser() {
-    await api("/auth/logout/", { method: "POST", body: "{}" });
-    setAuth({ loading: false, authenticated: false, loginUrl: "/auth/login/azuread-tenant-oauth2/" });
+    await logout();
     setSummary(null);
     setTenants([]);
     setRuns([]);
@@ -128,7 +78,7 @@ function App() {
       });
       api(`/runs/?tenantProfileId=${tenant.id}`)
         .then((data) => setRuns(data.runs))
-        .catch((err) => setError(err.message));
+        .catch((err) => setError(err.payload?.detail || err.message));
     }
   }, [selectedTenantId, tenants]);
 
@@ -264,198 +214,124 @@ function App() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  const heroAction = (
+    <>
+      {canManageTenants ? <button className="button" type="button" onClick={createNewTenant}>New Tenant Profile</button> : null}
+      <p>{auth.user?.roles?.length ? auth.user.roles.join(", ") : "No application role assigned."}</p>
+    </>
+  );
+
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">ComplianceApp</div>
-        {auth.authenticated ? (
-          <button className="profile-button" aria-label="Sign out" onClick={logoutUser}>
-            {auth.user?.name?.[0] || "A"}
-          </button>
-        ) : null}
-      </header>
+    <AppShell
+      activePage="assessments"
+      auth={auth}
+      onLogout={logoutUser}
+      title="Zero Trust assessment workspace"
+      eyebrow="Assessments"
+      heroAction={heroAction}
+    >
+      {error ? <div className="error-banner">{error}</div> : null}
 
-      <div className="workspace">
-        <aside className="sidebar" aria-label="Primary navigation">
-          <div className="search" aria-label="Find">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m16 16 4 4" />
-            </svg>
-            <span>Find...</span>
-          </div>
-          <nav className="nav">
-            <a className="nav-item" href="/">
-              <span className="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 11l9-8 9 8" />
-                  <path d="M5 10v10h14V10" />
-                </svg>
-              </span>
-              Home
-            </a>
-            <a className="nav-item active" href="/assessments.html" aria-current="page">
-              <span className="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 11l2 2 4-5" />
-                  <path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
-                  <path d="M16 4h4v4" />
-                </svg>
-              </span>
-              Assessments
-            </a>
-            {permissions.includes("viewAuditLog") ? (
-              <a className="nav-item" href="/audit-log.html">
-                <span className="nav-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 2v6h6" />
-                    <path d="M8 13h8" />
-                    <path d="M8 17h6" />
-                  </svg>
-                </span>
-                Audit Log
-              </a>
-            ) : null}
-          </nav>
-        </aside>
+      <section className="stats-grid" aria-label="Assessment summary">
+        <SummaryCard label="Saved Tenants" value={summary?.savedTenants} />
+        <SummaryCard label="Active Runs" value={summary?.activeRuns} />
+        <SummaryCard label="Reports Stored" value={summary?.reportsStored} />
+        <SummaryCard label="Most Recent Run" value={summary?.mostRecentRun?.status} />
+      </section>
 
-        <main className="content">
-          {auth.loading ? (
-            <section className="login-panel">
-              <h1>Zero Trust assessment workspace</h1>
-            </section>
-          ) : null}
-
-          {!auth.loading && !auth.authenticated ? (
-            <section className="login-panel">
-              <p className="eyebrow">Assessments</p>
-              <h1>Zero Trust assessment workspace</h1>
-              <button className="button primary" type="button" onClick={() => { window.location.href = auth.loginUrl; }}>
-                Sign in with Microsoft Entra ID
-              </button>
-            </section>
-          ) : null}
-
-          {auth.authenticated ? (
-          <>
-          <section className="hero">
-            <div>
-              <p className="eyebrow">Assessments</p>
-              <h1>Zero Trust assessment workspace</h1>
-            </div>
-            <div className="hero-action">
-              {canManageTenants ? <button className="button" type="button" onClick={createNewTenant}>New Tenant Profile</button> : null}
-              <p>{auth.user?.roles?.length ? auth.user.roles.join(", ") : "No application role assigned."}</p>
-            </div>
-          </section>
-
-          {error ? <div className="error-banner">{error}</div> : null}
-
-          <section className="stats-grid" aria-label="Assessment summary">
-            <SummaryCard label="Saved Tenants" value={summary?.savedTenants} />
-            <SummaryCard label="Active Runs" value={summary?.activeRuns} />
-            <SummaryCard label="Reports Stored" value={summary?.reportsStored} />
-            <SummaryCard label="Most Recent Run" value={summary?.mostRecentRun?.status} />
-          </section>
-
-          <section className="workspace-grid">
-            <article className="panel tenant-panel">
-              <p className="eyebrow">Tenant Profiles</p>
-              <h2>Saved assessment targets</h2>
-              <div className="tenant-list">
-                {canViewTenants ? tenants.map((tenant) => (
-                  <button
-                    key={tenant.id}
-                    className={`tenant-card ${tenant.id === selectedTenantId ? "selected" : ""}`}
-                    type="button"
-                    onClick={() => setSelectedTenantId(tenant.id)}
-                  >
-                    <div>
-                      <h3>{tenant.displayName}</h3>
-                      <p>{tenant.tenantId}</p>
-                    </div>
-                    {tenant.certificateThumbprint ? <span className="tag right">{tenant.certificateThumbprint}</span> : null}
-                  </button>
-                )) : null}
-              </div>
-            </article>
-
-            <article className="panel config-panel">
-              <p className="eyebrow">Tenant Configuration</p>
-              <form className="settings-form" onSubmit={saveTenant}>
-                <Field label="Display Name" value={form.displayName} onChange={(value) => updateField("displayName", value)} disabled={!canManageTenants} />
-                <Field label="Tenant ID" value={form.tenantId} onChange={(value) => updateField("tenantId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
-                <Field label="Client ID" value={form.clientId} onChange={(value) => updateField("clientId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
-                <Field label="Certificate Thumbprint" value={form.certificateThumbprint} onChange={(value) => updateField("certificateThumbprint", value)} disabled={!canManageTenants} />
-                <div className="actions form-actions">
-                  {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
-                  {canManageTenants && canConfigureKeyVaultCertificates ? (
-                    <button className="button" type="button" onClick={createCertificate} disabled={!selectedTenant || Boolean(certificateBusy)}>
-                      {certificateBusy === "create" ? "Creating..." : "Create Certificate"}
-                    </button>
-                  ) : null}
-                  {canManageTenants && canConfigureKeyVaultCertificates ? (
-                    <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !form.certificateThumbprint || Boolean(certificateBusy)}>
-                      {certificateBusy === "download" ? "Downloading..." : "Download .cer"}
-                    </button>
-                  ) : null}
-                  {canRunAssessments ? <button className="button" type="button" onClick={runAssessment} disabled={!selectedTenant}>Run Assessment</button> : null}
-                  {canDeleteTenants ? <button className="button" type="button" onClick={deleteTenant} disabled={!selectedTenant}>Delete Tenant</button> : null}
+      <section className="workspace-grid">
+        <article className="panel tenant-panel">
+          <p className="eyebrow">Tenant Profiles</p>
+          <h2>Saved assessment targets</h2>
+          <div className="tenant-list">
+            {canViewTenants ? tenants.map((tenant) => (
+              <button
+                key={tenant.id}
+                className={`tenant-card ${tenant.id === selectedTenantId ? "selected" : ""}`}
+                type="button"
+                onClick={() => setSelectedTenantId(tenant.id)}
+              >
+                <div>
+                  <h3>{tenant.displayName}</h3>
+                  <p>{tenant.tenantId}</p>
                 </div>
-              </form>
+                {tenant.certificateThumbprint ? <span className="tag right">{tenant.certificateThumbprint}</span> : null}
+              </button>
+            )) : null}
+          </div>
+        </article>
 
-              {canViewResults ? (
-                <>
-                  <h3 className="subheading">Run history</h3>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Open</th>
-                          <th>Started</th>
-                          <th>Completed</th>
-                          <th>Status</th>
-                          <th>Report</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {runs.map((run) => (
-                          <tr key={run.id}>
-                            <td><button className="link-button" type="button" onClick={() => loadRun(run)}>Open</button></td>
-                            <td>{formatDate(run.startedAt)}</td>
-                            <td>{formatDate(run.completedAt)}</td>
-                            <td><span className={`status ${statusClass(run.status)}`}>{run.status}</span></td>
-                            <td>
-                              {run.hasReport ? (
-                                <a className="link-button" href={`/api/runs/${run.id}/report/download/`}>Download</a>
-                              ) : null}
-                            </td>
-                            <td>
-                              {canRunAssessments && isRunCancellable(run) ? (
-                                <button className="link-button danger-link" type="button" onClick={() => cancelAssessment(run)} disabled={Boolean(cancelingRunId)}>
-                                  {cancelingRunId === run.id ? "Cancelling..." : "Cancel"}
-                                </button>
-                              ) : null}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <h3 className="subheading">Selected run logs</h3>
-                  <pre className="logs">{selectedRun?.logs?.map((log) => log.message).join("\n") || ""}</pre>
-                </>
+        <article className="panel config-panel">
+          <p className="eyebrow">Tenant Configuration</p>
+          <form className="settings-form" onSubmit={saveTenant}>
+            <Field label="Display Name" value={form.displayName} onChange={(value) => updateField("displayName", value)} disabled={!canManageTenants} />
+            <Field label="Tenant ID" value={form.tenantId} onChange={(value) => updateField("tenantId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
+            <Field label="Client ID" value={form.clientId} onChange={(value) => updateField("clientId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
+            <Field label="Certificate Thumbprint" value={form.certificateThumbprint} onChange={(value) => updateField("certificateThumbprint", value)} disabled={!canManageTenants} />
+            <div className="actions form-actions">
+              {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
+              {canManageTenants && canConfigureKeyVaultCertificates ? (
+                <button className="button" type="button" onClick={createCertificate} disabled={!selectedTenant || Boolean(certificateBusy)}>
+                  {certificateBusy === "create" ? "Creating..." : "Create Certificate"}
+                </button>
               ) : null}
-            </article>
-          </section>
-          </>
+              {canManageTenants && canConfigureKeyVaultCertificates ? (
+                <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !form.certificateThumbprint || Boolean(certificateBusy)}>
+                  {certificateBusy === "download" ? "Downloading..." : "Download .cer"}
+                </button>
+              ) : null}
+              {canRunAssessments ? <button className="button" type="button" onClick={runAssessment} disabled={!selectedTenant}>Run Assessment</button> : null}
+              {canDeleteTenants ? <button className="button" type="button" onClick={deleteTenant} disabled={!selectedTenant}>Delete Tenant</button> : null}
+            </div>
+          </form>
+
+          {canViewResults ? (
+            <>
+              <h3 className="subheading">Run history</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Open</th>
+                      <th>Started</th>
+                      <th>Completed</th>
+                      <th>Status</th>
+                      <th>Report</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.map((run) => (
+                      <tr key={run.id}>
+                        <td><button className="link-button" type="button" onClick={() => loadRun(run)}>Open</button></td>
+                        <td>{formatDate(run.startedAt)}</td>
+                        <td>{formatDate(run.completedAt)}</td>
+                        <td><span className={`status ${statusClass(run.status)}`}>{run.status}</span></td>
+                        <td>
+                          {run.hasReport ? (
+                            <a className="link-button" href={`/api/runs/${run.id}/report/download/`}>Download</a>
+                          ) : null}
+                        </td>
+                        <td>
+                          {canRunAssessments && isRunCancellable(run) ? (
+                            <button className="link-button danger-link" type="button" onClick={() => cancelAssessment(run)} disabled={Boolean(cancelingRunId)}>
+                              {cancelingRunId === run.id ? "Cancelling..." : "Cancel"}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <h3 className="subheading">Selected run logs</h3>
+              <pre className="logs">{selectedRun?.logs?.map((log) => log.message).join("\n") || ""}</pre>
+            </>
           ) : null}
-        </main>
-      </div>
-    </div>
+        </article>
+      </section>
+    </AppShell>
   );
 }
 
@@ -468,9 +344,9 @@ function SummaryCard({ label, value }) {
   );
 }
 
-function Field({ label, value, onChange, wide = false, disabled = false, maxLength, pattern }) {
+function Field({ label, value, onChange, disabled = false, maxLength, pattern }) {
   return (
-    <label className={wide ? "wide-field" : ""}>
+    <label>
       <span>{label}</span>
       <input type="text" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} maxLength={maxLength} pattern={pattern} />
     </label>

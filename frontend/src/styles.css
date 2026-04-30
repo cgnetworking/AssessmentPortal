@@ -188,14 +188,6 @@ h1 {
   font-weight: 850;
 }
 
-.intro {
-  max-width: 710px;
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.7;
-}
-
 .hero-action {
   display: grid;
   justify-items: end;
@@ -265,12 +257,6 @@ h1 {
   font-weight: 500;
 }
 
-.stat-card span {
-  display: block;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(430px, 0.9fr) minmax(620px, 1.4fr);
@@ -292,12 +278,16 @@ h1 {
   min-height: 790px;
 }
 
+.tenant-list {
+  display: grid;
+  gap: 12px;
+}
+
 .tenant-card {
   width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  margin-top: 12px;
   padding: 20px 16px;
   border: 1px solid var(--line);
   border-radius: 15px;
@@ -367,23 +357,8 @@ h1 {
   color: var(--danger-text);
 }
 
-.tenant-note {
-  grid-column: 1 / -1;
-  padding-top: 8px;
-}
-
-.section-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.section-title h2 {
-  flex-basis: 100%;
-  margin-bottom: 0;
-  font-size: 25px;
+.config-panel {
+  min-width: 0;
 }
 
 .settings-form {
@@ -393,7 +368,6 @@ h1 {
   margin-bottom: 18px;
 }
 
-.settings-form .wide-field,
 .settings-form .form-actions {
   grid-column: 1 / -1;
 }
@@ -403,8 +377,7 @@ h1 {
   gap: 6px;
 }
 
-.settings-form span,
-.connector-field legend {
+.settings-form span {
   color: #777088;
   font-size: 12px;
   font-weight: 800;
@@ -422,43 +395,9 @@ h1 {
   color: #3a2858;
 }
 
-.settings-form input:disabled,
-.connector-field input:disabled + span {
-  opacity: 0.68;
-}
-
 .settings-form input:disabled {
+  opacity: 0.68;
   background: #f7f3fb;
-}
-
-.connector-field {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.connector-field > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 6px;
-}
-
-.connector-field label {
-  min-height: 36px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fbf9ff;
-}
-
-.connector-field input {
-  width: auto;
-  height: auto;
 }
 
 .actions {
@@ -510,10 +449,6 @@ td {
 
 tbody tr:last-child td {
   border-bottom: 0;
-}
-
-tr.highlight td {
-  background: #eee6fa;
 }
 
 a {
