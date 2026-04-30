@@ -49,7 +49,7 @@ The backend persists:
 - Assessment runs
 - Run logs
 - Assessment results
-- Report artifacts
+- Report artifacts stored in PostgreSQL
 - Immutable audit events
 
 Tenant profiles contain metadata required to run assessments, including tenant ID, app client ID, certificate thumbprint, and Key Vault certificate URI.
@@ -124,6 +124,7 @@ Primary endpoints:
 - `GET /api/runs/?tenantProfileId=<tenant-id>`
 - `POST /api/runs/`
 - `GET /api/runs/<run-id>/`
+- `GET /api/runs/<run-id>/report/download/`
 - `GET /api/audit-log/`
 
 ## Deployment

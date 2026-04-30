@@ -11,7 +11,7 @@ ensure_users_and_directories() {
         useradd --system --gid "${APP_GROUP}" --home-dir "${DATA_DIR}" --create-home --shell /usr/sbin/nologin "${APP_USER}"
     fi
 
-    mkdir -p "${INSTALL_DIR}" "${ENV_DIR}" "${DATA_DIR}/assessment-runs" "${DATA_DIR}/.cache"
+    mkdir -p "${INSTALL_DIR}" "${ENV_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
     chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
     chmod 0750 "${DATA_DIR}"
 }

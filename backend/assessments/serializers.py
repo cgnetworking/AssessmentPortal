@@ -14,6 +14,8 @@ def tenant_to_dict(tenant, include_key_vault_certificate_uri=False):
 
 
 def run_to_dict(run):
+    report_artifact_count = getattr(run, "report_artifact_count", None)
+    has_report = report_artifact_count > 0 if report_artifact_count is not None else run.artifacts.exists()
     return {
         "id": str(run.id),
         "tenantProfileId": str(run.tenant_profile_id),
@@ -23,7 +25,7 @@ def run_to_dict(run):
         "completedAt": run.completed_at.isoformat() if run.completed_at else None,
         "exitCode": run.exit_code,
         "errorMessage": run.error_message,
-        "outputPath": run.output_path,
+        "hasReport": has_report,
         "createdAt": run.created_at.isoformat(),
         "updatedAt": run.updated_at.isoformat(),
     }

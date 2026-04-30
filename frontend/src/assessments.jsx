@@ -409,7 +409,11 @@ function App() {
                             <td>{formatDate(run.startedAt)}</td>
                             <td>{formatDate(run.completedAt)}</td>
                             <td><span className={`status ${statusClass(run.status)}`}>{run.status}</span></td>
-                            <td>{run.outputPath ? "Stored" : ""}</td>
+                            <td>
+                              {run.hasReport ? (
+                                <a className="link-button" href={`/api/runs/${run.id}/report/download/`}>Download</a>
+                              ) : null}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

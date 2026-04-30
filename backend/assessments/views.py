@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .audit import audit_metadata_diff, record_audit_event, tenant_audit_snapshot
-from .models import AssessmentRun, AuditEvent, TenantProfile
+from .models import AssessmentRun, AuditEvent, ReportArtifact, TenantProfile
 from .roles import require_permission, user_permissions, user_roles
 from .serializers import audit_event_to_dict, log_to_dict, run_to_dict, tenant_to_dict
 from .services.certificates import create_certificate_for_tenant, get_public_certificate_der
@@ -254,7 +254,7 @@ def run_collection(request):
     if request.method == "GET":
         if "viewResults" not in permissions:
             return JsonResponse({"detail": "Forbidden", "requiredPermission": "viewResults"}, status=403)
-        queryset = AssessmentRun.objects.select_related("tenant_profile")
+        queryset = AssessmentRun.objects.select_related("tenant_profile").annotate(report_artifact_count=Count("artifacts", distinct=True))
         tenant_id = request.GET.get("tenantProfileId")
         if tenant_id:
             queryset = queryset.filter(tenant_profile_id=tenant_id)
@@ -294,6 +294,27 @@ def run_detail(request, run_id):
             "results": list(run.results.values("test_id", "pillar", "name", "status", "risk", "recommendation", "evidence")),
         }
     )
+
+
+@require_auth
+@require_permission("viewResults")
+def run_report_download(request, run_id):
+    if request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+
+    run = get_object_or_404(AssessmentRun, id=run_id)
+    artifact = (
+        ReportArtifact.objects.filter(run=run, artifact_type="html").order_by("created_at", "id").first()
+        or ReportArtifact.objects.filter(run=run, artifact_type="json").order_by("created_at", "id").first()
+    )
+    if artifact is None:
+        return JsonResponse({"detail": "No report artifact is stored for this run."}, status=404)
+
+    response = HttpResponse(artifact.content, content_type=artifact.content_type or "application/octet-stream")
+    filename = artifact.filename or f"assessment-report.{artifact.artifact_type}"
+    safe_filename = filename.replace("/", "-").replace("\\", "-")
+    response["Content-Disposition"] = f'attachment; filename="{safe_filename}"'
+    return response
 
 
 @require_auth

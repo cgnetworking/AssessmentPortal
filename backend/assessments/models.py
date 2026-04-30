@@ -62,7 +62,6 @@ class AssessmentRun(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     exit_code = models.IntegerField(null=True, blank=True)
     error_message = models.TextField(blank=True)
-    output_path = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -102,7 +101,9 @@ class AssessmentResult(models.Model):
 class ReportArtifact(models.Model):
     run = models.ForeignKey(AssessmentRun, related_name="artifacts", on_delete=models.CASCADE)
     artifact_type = models.CharField(max_length=64)
-    storage_uri = models.TextField()
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=128)
+    content = models.BinaryField()
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

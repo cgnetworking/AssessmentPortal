@@ -31,7 +31,7 @@ class AssessmentResultAdmin(admin.ModelAdmin):
 
 @admin.register(ReportArtifact)
 class ReportArtifactAdmin(admin.ModelAdmin):
-    list_display = ("run", "artifact_type", "created_at")
+    list_display = ("run", "artifact_type", "filename", "content_type", "created_at")
     list_filter = ("artifact_type",)
 
 

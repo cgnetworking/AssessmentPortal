@@ -1,5 +1,6 @@
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 from django.conf import settings
@@ -11,48 +12,49 @@ from assessments.models import AssessmentRun, ReportArtifact, RunLog
 class PowerShellAssessmentRunner:
     def run(self, run: AssessmentRun) -> AssessmentRun:
         tenant = run.tenant_profile
-        output_dir = Path(settings.ZTA_OUTPUT_ROOT) / str(run.id)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        work_root = Path(settings.ZTA_WORK_ROOT)
+        work_root.mkdir(parents=True, exist_ok=True)
 
         run.status = AssessmentRun.Status.RUNNING
         run.started_at = timezone.now()
-        run.output_path = str(output_dir)
-        run.save(update_fields=["status", "started_at", "output_path", "updated_at"])
+        run.save(update_fields=["status", "started_at", "updated_at"])
 
         try:
-            env = self._build_environment(run, output_dir)
-            process = subprocess.Popen(
-                [
-                    "pwsh",
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    str(settings.ZTA_RUNNER_SCRIPT),
-                ],
-                cwd=str(settings.BASE_DIR),
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
+            with tempfile.TemporaryDirectory(prefix=f"assessment-{run.id}-", dir=work_root) as output_dir_name:
+                output_dir = Path(output_dir_name)
+                env = self._build_environment(run, output_dir)
+                process = subprocess.Popen(
+                    [
+                        "pwsh",
+                        "-NoLogo",
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(settings.ZTA_RUNNER_SCRIPT),
+                    ],
+                    cwd=str(settings.BASE_DIR),
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
 
-            assert process.stdout is not None
-            for line in process.stdout:
-                RunLog.objects.create(run=run, stream="stdout", message=line.rstrip())
+                assert process.stdout is not None
+                for line in process.stdout:
+                    RunLog.objects.create(run=run, stream="stdout", message=line.rstrip())
 
-            exit_code = process.wait()
-            run.exit_code = exit_code
-            run.completed_at = timezone.now()
-            if exit_code == 0:
-                run.status = AssessmentRun.Status.COMPLETED
-                self._record_artifacts(run, output_dir)
-            else:
-                run.status = AssessmentRun.Status.FAILED
-                run.error_message = f"PowerShell assessment exited with code {exit_code}"
+                exit_code = process.wait()
+                run.exit_code = exit_code
+                run.completed_at = timezone.now()
+                if exit_code == 0:
+                    run.status = AssessmentRun.Status.COMPLETED
+                    self._record_artifacts(run, output_dir)
+                else:
+                    run.status = AssessmentRun.Status.FAILED
+                    run.error_message = f"PowerShell assessment exited with code {exit_code}"
             run.save()
             return run
         except Exception as exc:
@@ -95,13 +97,20 @@ class PowerShellAssessmentRunner:
         return env
 
     def _record_artifacts(self, run, output_dir):
-        for path in output_dir.glob("**/*"):
+        artifacts = [
+            (output_dir / "ZeroTrustAssessmentReport.html", "html", "text/html; charset=utf-8"),
+            (output_dir / "zt-export" / "ZeroTrustAssessmentReport.json", "json", "application/json"),
+        ]
+        for path, artifact_type, content_type in artifacts:
             if not path.is_file():
                 continue
-            if path.suffix.lower() in {".html", ".json"}:
-                ReportArtifact.objects.get_or_create(
-                    run=run,
-                    artifact_type=path.suffix.lower().lstrip("."),
-                    storage_uri=str(path),
-                    defaults={"metadata": {"filename": path.name}},
-                )
+            content = path.read_bytes()
+            ReportArtifact.objects.filter(run=run, artifact_type=artifact_type).delete()
+            ReportArtifact.objects.create(
+                run=run,
+                artifact_type=artifact_type,
+                filename=path.name,
+                content_type=content_type,
+                content=content,
+                metadata={"filename": path.name, "size": len(content)},
+            )
