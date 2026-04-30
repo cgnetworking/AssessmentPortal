@@ -8,10 +8,10 @@ import "./styles.css";
 const emptyTenant = {
   displayName: "",
   tenantId: "",
-  clientId: "",
-  certificateThumbprint: ""
+  clientId: ""
 };
 const guidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const displayNamePattern = "[0-9A-Za-z]{1,50}";
 
 function App() {
   const { auth, logout, permissions } = useAuth();
@@ -73,8 +73,7 @@ function App() {
       setForm({
         displayName: tenant.displayName || "",
         tenantId: tenant.tenantId || "",
-        clientId: tenant.clientId || "",
-        certificateThumbprint: tenant.certificateThumbprint || ""
+        clientId: tenant.clientId || ""
       });
       api(`/runs/?tenantProfileId=${tenant.id}`)
         .then((data) => setRuns(data.runs))
@@ -110,7 +109,7 @@ function App() {
     if (!selectedTenant || !canRunAssessments) return;
     const data = await api("/runs/", {
       method: "POST",
-      body: JSON.stringify({ tenantProfileId: selectedTenant.id, pillar: "All" })
+      body: JSON.stringify({ tenantProfileId: selectedTenant.id })
     });
     setRuns((items) => [data.run, ...items]);
     setSelectedRun(data.run);
@@ -143,8 +142,7 @@ function App() {
       setForm({
         displayName: data.tenant.displayName || "",
         tenantId: data.tenant.tenantId || "",
-        clientId: data.tenant.clientId || "",
-        certificateThumbprint: data.tenant.certificateThumbprint || ""
+        clientId: data.tenant.clientId || ""
       });
       await refresh();
     } catch (err) {
@@ -264,10 +262,10 @@ function App() {
         <article className="panel config-panel">
           <p className="eyebrow">Tenant Configuration</p>
           <form className="settings-form" onSubmit={saveTenant}>
-            <Field label="Display Name" value={form.displayName} onChange={(value) => updateField("displayName", value)} disabled={!canManageTenants} />
+            <Field label="Display Name" value={form.displayName} onChange={(value) => updateField("displayName", value)} disabled={!canManageTenants} maxLength={50} pattern={displayNamePattern} required title="Use 1 to 50 alphanumeric characters." />
             <Field label="Tenant ID" value={form.tenantId} onChange={(value) => updateField("tenantId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
             <Field label="Client ID" value={form.clientId} onChange={(value) => updateField("clientId", value)} disabled={!canManageTenants} maxLength={36} pattern={guidPattern} />
-            <Field label="Certificate Thumbprint" value={form.certificateThumbprint} onChange={(value) => updateField("certificateThumbprint", value)} disabled={!canManageTenants} />
+            <ReadOnlyField label="Certificate Thumbprint" value={selectedTenant?.certificateThumbprint || ""} />
             <div className="actions form-actions">
               {canManageTenants ? <button className="button primary" type="submit">Save Settings</button> : null}
               {canManageTenants && canConfigureKeyVaultCertificates ? (
@@ -276,7 +274,7 @@ function App() {
                 </button>
               ) : null}
               {canManageTenants && canConfigureKeyVaultCertificates ? (
-                <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !form.certificateThumbprint || Boolean(certificateBusy)}>
+                <button className="button" type="button" onClick={downloadCertificate} disabled={!selectedTenant || !selectedTenant.certificateThumbprint || Boolean(certificateBusy)}>
                   {certificateBusy === "download" ? "Downloading..." : "Download .cer"}
                 </button>
               ) : null}
@@ -344,11 +342,20 @@ function SummaryCard({ label, value }) {
   );
 }
 
-function Field({ label, value, onChange, disabled = false, maxLength, pattern }) {
+function Field({ label, value, onChange, disabled = false, maxLength, pattern, required = false, title }) {
   return (
     <label>
       <span>{label}</span>
-      <input type="text" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} maxLength={maxLength} pattern={pattern} />
+      <input type="text" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} maxLength={maxLength} pattern={pattern} required={required} title={title} />
+    </label>
+  );
+}
+
+function ReadOnlyField({ label, value }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input type="text" value={value} disabled readOnly />
     </label>
   );
 }

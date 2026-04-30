@@ -8,6 +8,8 @@ import django.db.models.deletion
 
 HEX_GUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 HEX_GUID_ERROR = "Must use the 8-4-4-4-12 hexadecimal GUID pattern, such as 12345678-abcd-1234-abcd-1234567890ab."
+ALPHANUMERIC_DISPLAY_NAME_PATTERN = r"^[0-9A-Za-z]{1,50}$"
+ALPHANUMERIC_DISPLAY_NAME_ERROR = "Display name must be 1 to 50 alphanumeric characters."
 ROLE_GROUPS = ["Portal Admin", "Assessment Operator", "Reader"]
 
 
@@ -37,7 +39,10 @@ class Migration(migrations.Migration):
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 (
                     "display_name",
-                    models.CharField(max_length=255),
+                    models.CharField(
+                        max_length=50,
+                        validators=[RegexValidator(message=ALPHANUMERIC_DISPLAY_NAME_ERROR, regex=ALPHANUMERIC_DISPLAY_NAME_PATTERN)],
+                    ),
                 ),
                 (
                     "tenant_id",

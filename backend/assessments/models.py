@@ -8,12 +8,15 @@ from django.db import models
 
 HEX_GUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 HEX_GUID_ERROR = "Must use the 8-4-4-4-12 hexadecimal GUID pattern, such as 12345678-abcd-1234-abcd-1234567890ab."
+ALPHANUMERIC_DISPLAY_NAME_PATTERN = r"^[0-9A-Za-z]{1,50}$"
+ALPHANUMERIC_DISPLAY_NAME_ERROR = "Display name must be 1 to 50 alphanumeric characters."
 hex_guid_validator = RegexValidator(regex=HEX_GUID_PATTERN, message=HEX_GUID_ERROR)
+alphanumeric_display_name_validator = RegexValidator(regex=ALPHANUMERIC_DISPLAY_NAME_PATTERN, message=ALPHANUMERIC_DISPLAY_NAME_ERROR)
 
 
 class TenantProfile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    display_name = models.CharField(max_length=255)
+    display_name = models.CharField(max_length=50, validators=[alphanumeric_display_name_validator])
     tenant_id = models.CharField(max_length=36, unique=True, validators=[hex_guid_validator])
     client_id = models.CharField(max_length=36, validators=[hex_guid_validator])
     certificate_thumbprint = models.CharField(max_length=128, blank=True)
@@ -32,17 +35,18 @@ class TenantProfile(models.Model):
         return self.display_name
 
     def clean(self):
+        self.display_name = str(self.display_name or "").strip()
         self.tenant_id = str(self.tenant_id or "").strip().lower()
         self.client_id = str(self.client_id or "").strip().lower()
 
-    def validate_identifiers(self):
-        for field_name in ("tenant_id", "client_id"):
+    def validate_profile_fields(self):
+        for field_name in ("display_name", "tenant_id", "client_id"):
             field = self._meta.get_field(field_name)
             field.run_validators(getattr(self, field_name))
 
     def save(self, *args, **kwargs):
         self.clean()
-        self.validate_identifiers()
+        self.validate_profile_fields()
         return super().save(*args, **kwargs)
 
 

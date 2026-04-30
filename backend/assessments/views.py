@@ -131,12 +131,13 @@ def tenant_collection(request):
             return bad_json_response(exc)
         if "keyVaultCertificateUri" in data:
             return JsonResponse({"detail": "Key Vault certificate URI is managed by the server from ZTA_KEY_VAULT_URL."}, status=400)
+        if "certificateThumbprint" in data:
+            return JsonResponse({"detail": "Certificate thumbprint is managed by the server from Azure Key Vault."}, status=400)
         try:
             tenant = TenantProfile.objects.create(
                 display_name=data.get("displayName", "").strip(),
                 tenant_id=data.get("tenantId") or "",
                 client_id=data.get("clientId") or "",
-                certificate_thumbprint=data.get("certificateThumbprint", "").strip(),
                 key_vault_certificate_uri="",
             )
         except ValidationError as exc:
@@ -174,12 +175,13 @@ def tenant_detail(request, tenant_id):
             return bad_json_response(exc)
         if "keyVaultCertificateUri" in data:
             return JsonResponse({"detail": "Key Vault certificate URI is managed by the server from ZTA_KEY_VAULT_URL."}, status=400)
+        if "certificateThumbprint" in data:
+            return JsonResponse({"detail": "Certificate thumbprint is managed by the server from Azure Key Vault."}, status=400)
         before = tenant_audit_snapshot(tenant)
         field_map = {
             "displayName": "display_name",
             "tenantId": "tenant_id",
             "clientId": "client_id",
-            "certificateThumbprint": "certificate_thumbprint",
         }
         for api_name, model_name in field_map.items():
             if api_name in data:
@@ -289,8 +291,10 @@ def run_collection(request):
             data = parse_json(request)
         except BadJsonBody as exc:
             return bad_json_response(exc)
+        if "pillar" in data:
+            return JsonResponse({"detail": "Assessment pillar is managed by the server and always runs all pillars."}, status=400)
         tenant = get_object_or_404(TenantProfile, id=data.get("tenantProfileId"))
-        run = AssessmentRun.objects.create(tenant_profile=tenant, pillar=data.get("pillar", "All"))
+        run = AssessmentRun.objects.create(tenant_profile=tenant, pillar="All")
         record_audit_event(
             request=request,
             action=AuditEvent.Action.ASSESSMENT_QUEUED,
