@@ -47,34 +47,85 @@ function New-EntraTable {
         return 'text'
     }
 
-    Write-PSFMessage "Importing PostgreSQL table $TableName from $FilePath" -Tag Import
+    function Get-ExportRowsFromFile {
+        param([Parameter(Mandatory = $true)][string]$Path)
 
-    $rows = [System.Collections.Generic.List[object]]::new()
-    foreach ($file in Get-ChildItem -Path $FilePath -File -ErrorAction SilentlyContinue) {
-        $content = Get-Content -Path $file.FullName -Raw
-        if (-not $content) { continue }
+        $content = Get-Content -Path $Path -Raw
+        if (-not $content) { return }
 
         $json = $content | ConvertFrom-Json
         if ($json.PSObject.Properties.Name -contains 'value') {
-            foreach ($item in @($json.value)) { $rows.Add($item) }
+            foreach ($item in @($json.value)) { $item }
         }
         elseif ($json -is [array]) {
-            foreach ($item in $json) { $rows.Add($item) }
+            foreach ($item in $json) { $item }
         }
         else {
-            $rows.Add($json)
+            $json
         }
     }
+
+    function New-InsertValueRow {
+        param(
+            [Parameter(Mandatory = $true)]
+            $Row,
+
+            [Parameter(Mandatory = $true)]
+            $ColumnTypes
+        )
+
+        $insertValues = @((ConvertTo-SqlLiteral -Value $Row) + '::jsonb')
+
+        foreach ($columnName in $ColumnTypes.Keys) {
+            $property = $Row.PSObject.Properties[$columnName]
+            $value = if ($property) { $property.Value } else { $null }
+            if ($ColumnTypes[$columnName] -eq 'jsonb') {
+                $insertValues += ((ConvertTo-SqlLiteral -Value $value) + '::jsonb')
+            }
+            else {
+                $insertValues += ConvertTo-ScalarSqlLiteral -Value $value
+            }
+        }
+
+        "($($insertValues -join ', '))"
+    }
+
+    function Invoke-InsertBatch {
+        param(
+            [Parameter(Mandatory = $true)]
+            $Database,
+
+            [Parameter(Mandatory = $true)]
+            [string]
+            $InsertPrefix,
+
+            [Parameter(Mandatory = $true)]
+            [System.Collections.Generic.List[string]]
+            $ValueRows
+        )
+
+        if ($ValueRows.Count -eq 0) { return }
+
+        $sql = $InsertPrefix + ($ValueRows -join ', ') + ';'
+        Invoke-DatabaseQuery -Database $Database -Sql $sql -NonQuery
+    }
+
+    Write-PSFMessage "Importing PostgreSQL table $TableName from $FilePath" -Tag Import
 
     $schema = if ($Database.Schema) { $Database.Schema } else { 'main' }
     $schemaIdentifier = ConvertTo-SqlIdentifier -Name $schema
     $tableIdentifier = ConvertTo-SqlIdentifier -Name $TableName
 
+    $files = @(Get-ChildItem -Path $FilePath -File -ErrorAction SilentlyContinue)
     $columnTypes = [ordered]@{}
-    foreach ($row in $rows) {
-        foreach ($property in $row.PSObject.Properties) {
-            if (-not $columnTypes.Contains($property.Name) -and $null -ne $property.Value) {
-                $columnTypes[$property.Name] = Get-PostgresColumnType -Value $property.Value
+    $hasRows = $false
+    foreach ($file in $files) {
+        foreach ($row in (Get-ExportRowsFromFile -Path $file.FullName)) {
+            $hasRows = $true
+            foreach ($property in $row.PSObject.Properties) {
+                if (-not $columnTypes.Contains($property.Name) -and $null -ne $property.Value) {
+                    $columnTypes[$property.Name] = Get-PostgresColumnType -Value $property.Value
+                }
             }
         }
     }
@@ -88,26 +139,35 @@ function New-EntraTable {
     Invoke-DatabaseQuery -Database $Database -Sql "DROP TABLE IF EXISTS $schemaIdentifier.$tableIdentifier CASCADE;" -NonQuery
     Invoke-DatabaseQuery -Database $Database -Sql "CREATE TABLE $schemaIdentifier.$tableIdentifier ($($columns -join ', '));" -NonQuery
 
-    if ($rows.Count -eq 0) {
+    if (-not $hasRows) {
         return
     }
 
-    foreach ($row in $rows) {
-        $insertColumns = @('"__zt_raw"')
-        $insertValues = @((ConvertTo-SqlLiteral -Value $row) + '::jsonb')
-
-        foreach ($columnName in $columnTypes.Keys) {
-            $value = $row.PSObject.Properties[$columnName].Value
-            $insertColumns += ConvertTo-SqlIdentifier -Name $columnName
-            if ($columnTypes[$columnName] -eq 'jsonb') {
-                $insertValues += ((ConvertTo-SqlLiteral -Value $value) + '::jsonb')
-            }
-            else {
-                $insertValues += ConvertTo-ScalarSqlLiteral -Value $value
-            }
-        }
-
-        $sql = "INSERT INTO $schemaIdentifier.$tableIdentifier ($($insertColumns -join ', ')) VALUES ($($insertValues -join ', '));"
-        Invoke-DatabaseQuery -Database $Database -Sql $sql -NonQuery
+    $insertColumns = @('"__zt_raw"')
+    foreach ($columnName in $columnTypes.Keys) {
+        $insertColumns += ConvertTo-SqlIdentifier -Name $columnName
     }
+    $insertPrefix = "INSERT INTO $schemaIdentifier.$tableIdentifier ($($insertColumns -join ', ')) VALUES "
+    $batchSize = 500
+    $maxSqlLength = 1MB
+    $valueRows = [System.Collections.Generic.List[string]]::new()
+    $currentSqlLength = $insertPrefix.Length
+
+    foreach ($file in $files) {
+        foreach ($row in (Get-ExportRowsFromFile -Path $file.FullName)) {
+            $valueRow = New-InsertValueRow -Row $row -ColumnTypes $columnTypes
+            $valueRowLength = $valueRow.Length + 2
+
+            if ($valueRows.Count -gt 0 -and ($valueRows.Count -ge $batchSize -or ($currentSqlLength + $valueRowLength) -gt $maxSqlLength)) {
+                Invoke-InsertBatch -Database $Database -InsertPrefix $insertPrefix -ValueRows $valueRows
+                $valueRows.Clear()
+                $currentSqlLength = $insertPrefix.Length
+            }
+
+            $valueRows.Add($valueRow)
+            $currentSqlLength += $valueRowLength
+        }
+    }
+
+    Invoke-InsertBatch -Database $Database -InsertPrefix $insertPrefix -ValueRows $valueRows
 }
