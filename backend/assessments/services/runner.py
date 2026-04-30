@@ -3,12 +3,16 @@ import queue
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
 
 from assessments.models import AssessmentRun, ReportArtifact, RunLog
+
+
+MAX_RUN_SECONDS = 24 * 60 * 60
 
 
 class PowerShellAssessmentRunner:
@@ -51,13 +55,16 @@ class PowerShellAssessmentRunner:
                 )
 
                 assert process.stdout is not None
-                exit_code, cancellation_requested = self._monitor_process(run, process)
+                exit_code, cancellation_requested, timed_out = self._monitor_process(run, process)
 
                 run.exit_code = exit_code
                 run.completed_at = timezone.now()
                 if cancellation_requested or self._is_cancelled(run):
                     run.status = AssessmentRun.Status.CANCELLED
                     run.error_message = "Assessment run was cancelled."
+                elif timed_out:
+                    run.status = AssessmentRun.Status.FAILED
+                    run.error_message = "Assessment run exceeded the 24 hour maximum runtime."
                 elif exit_code == 0:
                     run.status = AssessmentRun.Status.COMPLETED
                     self._record_artifacts(run, output_dir)
@@ -91,6 +98,8 @@ class PowerShellAssessmentRunner:
         threading.Thread(target=read_stdout, daemon=True).start()
         stdout_closed = False
         cancellation_requested = False
+        timed_out = False
+        deadline = time.monotonic() + MAX_RUN_SECONDS
 
         while True:
             try:
@@ -108,10 +117,15 @@ class PowerShellAssessmentRunner:
                 RunLog.objects.create(run=run, stream="stderr", message="Cancellation requested. Stopping assessment process.")
                 self._terminate_process(process)
 
+            if not timed_out and time.monotonic() >= deadline:
+                timed_out = True
+                RunLog.objects.create(run=run, stream="stderr", message="Assessment exceeded the 24 hour maximum runtime. Stopping assessment process.")
+                self._terminate_process(process)
+
             if stdout_closed and process.poll() is not None:
                 break
 
-        return process.wait(), cancellation_requested
+        return process.wait(), cancellation_requested, timed_out
 
     def _terminate_process(self, process):
         if process.poll() is not None:
