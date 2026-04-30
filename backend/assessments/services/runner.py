@@ -13,6 +13,20 @@ from assessments.models import AssessmentRun, ReportArtifact, RunLog
 
 
 MAX_RUN_SECONDS = 24 * 60 * 60
+POWERSHELL_INHERITED_ENV_VARS = {
+    "AZURE_CLIENT_ID",
+    "AZURE_MANAGED_IDENTITY_CLIENT_ID",
+    "HOME",
+    "IDENTITY_ENDPOINT",
+    "IDENTITY_HEADER",
+    "LANG",
+    "LC_ALL",
+    "PATH",
+    "PSModulePath",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+}
 
 
 class PowerShellAssessmentRunner:
@@ -142,11 +156,11 @@ class PowerShellAssessmentRunner:
 
     def _build_environment(self, run, output_dir):
         tenant = run.tenant_profile
-        env = os.environ.copy()
-        env.pop("DATABASE_URL", None)
-        env.pop("PGPASSWORD", None)
-        env.pop("POSTGRES_PASSWORD", None)
-        env.pop("ZT_POSTGRES_CONNECTION_STRING", None)
+        env = {
+            name: value
+            for name in POWERSHELL_INHERITED_ENV_VARS
+            if (value := os.environ.get(name))
+        }
         env.update(
             {
                 "PGHOST": settings.POSTGRES_HOST,
