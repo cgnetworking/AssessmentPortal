@@ -19,6 +19,22 @@ function Get-HtmlReport {
         [string] $Path
     )
 
+    function ConvertTo-SafeInlineJson {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory = $true)]
+            [string] $Json
+        )
+
+        # Keep the JSON valid while preventing values from ending the inline script tag.
+        $safeJson = $Json.Replace('&', '\u0026')
+        $safeJson = $safeJson.Replace('<', '\u003c')
+        $safeJson = $safeJson.Replace('>', '\u003e')
+        $safeJson = $safeJson.Replace([string][char]0x2028, '\u2028')
+        $safeJson = $safeJson.Replace([string][char]0x2029, '\u2029')
+        return $safeJson
+    }
+
     #$json = $AssessmentResults | ConvertTo-Json -Depth 10 -WarningAction Ignore
     # Need to write to a file and read it back to avoid the json being escaped
     $resultsJsonPath = Join-Path $Path "ZeroTrustAssessmentReportTemp.json"
@@ -37,7 +53,7 @@ function Get-HtmlReport {
     $insertLocationEnd = $templateHtml.IndexOf($endMarker) + $endMarker.Length
 
     $outputHtml = $templateHtml.Substring(0, $insertLocationStart)
-    $outputHtml += "reportData= $json"
+    $outputHtml += "reportData= $(ConvertTo-SafeInlineJson -Json $json)"
     $outputHtml += $templateHtml.Substring($insertLocationEnd)
 
     return $outputHtml
