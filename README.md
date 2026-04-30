@@ -129,4 +129,4 @@ Primary endpoints:
 
 ## Deployment
 
-See [deployment.md](deployment.md) for operator setup steps, Azure prerequisites, environment configuration, service startup, verification, and first-login role assignment.
+See [deployment.md](deployment.md) for operator setup steps, Azure prerequisites, environment configuration, service startup, verification, initial superuser creation, and first-login role assignment.

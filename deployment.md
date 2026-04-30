@@ -108,7 +108,21 @@ Open the portal:
 https://<host>/
 ```
 
-## 7. Assign Application Roles
+## 7. Create The Initial Superuser
+
+Create one local Django superuser before assigning application roles. This account is used to sign in to Django admin at `https://<host>/admin/`; normal portal users still authenticate through Microsoft Entra ID.
+
+Run this from the backend directory after migrations have completed:
+
+```bash
+python manage.py createsuperuser
+```
+
+On the deployed host, use the deployment virtual environment and make sure `/etc/assessmentportal/assessmentportal.env` is loaded before running the command.
+
+The superuser is treated as `Portal Admin` by the application.
+
+## 8. Assign Application Roles
 
 After users sign in for the first time, assign them to one of these Django groups through Django admin:
 
