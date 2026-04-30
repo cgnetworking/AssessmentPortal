@@ -61,6 +61,7 @@ function App() {
   const [selectedRun, setSelectedRun] = useState(null);
   const [error, setError] = useState("");
   const [certificateBusy, setCertificateBusy] = useState("");
+  const [cancelingRunId, setCancelingRunId] = useState("");
 
   const selectedTenant = useMemo(
     () => tenants.find((tenant) => tenant.id === selectedTenantId) || null,
@@ -164,6 +165,22 @@ function App() {
     setRuns((items) => [data.run, ...items]);
     setSelectedRun(data.run);
     await refresh();
+  }
+
+  async function cancelAssessment(run) {
+    if (!canRunAssessments || !isRunCancellable(run) || cancelingRunId) return;
+    setError("");
+    setCancelingRunId(run.id);
+    try {
+      const data = await api(`/runs/${run.id}/cancel/`, { method: "POST", body: "{}" });
+      setRuns((items) => items.map((item) => (item.id === data.run.id ? data.run : item)));
+      setSelectedRun((current) => (current?.id === data.run.id ? { ...current, ...data.run } : current));
+      await refresh();
+    } catch (err) {
+      setError(err.payload?.detail || err.message);
+    } finally {
+      setCancelingRunId("");
+    }
   }
 
   async function createCertificate() {
@@ -400,6 +417,7 @@ function App() {
                           <th>Completed</th>
                           <th>Status</th>
                           <th>Report</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -412,6 +430,13 @@ function App() {
                             <td>
                               {run.hasReport ? (
                                 <a className="link-button" href={`/api/runs/${run.id}/report/download/`}>Download</a>
+                              ) : null}
+                            </td>
+                            <td>
+                              {canRunAssessments && isRunCancellable(run) ? (
+                                <button className="link-button danger-link" type="button" onClick={() => cancelAssessment(run)} disabled={Boolean(cancelingRunId)}>
+                                  {cancelingRunId === run.id ? "Cancelling..." : "Cancel"}
+                                </button>
                               ) : null}
                             </td>
                           </tr>
@@ -462,6 +487,10 @@ function statusClass(status) {
   if (status === "running" || status === "queued") return "active";
   if (status === "failed") return "danger";
   return "neutral";
+}
+
+function isRunCancellable(run) {
+  return run?.status === "queued" || run?.status === "running";
 }
 
 createRoot(document.getElementById("root")).render(<App />);

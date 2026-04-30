@@ -1,6 +1,8 @@
 import os
+import queue
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 from django.conf import settings
@@ -11,7 +13,13 @@ from assessments.models import AssessmentRun, ReportArtifact, RunLog
 
 class PowerShellAssessmentRunner:
     def run(self, run: AssessmentRun) -> AssessmentRun:
-        tenant = run.tenant_profile
+        run.refresh_from_db(fields=["status"])
+        if run.status == AssessmentRun.Status.CANCELLED:
+            if run.completed_at is None:
+                run.completed_at = timezone.now()
+                run.save(update_fields=["completed_at", "updated_at"])
+            return run
+
         work_root = Path(settings.ZTA_WORK_ROOT)
         work_root.mkdir(parents=True, exist_ok=True)
 
@@ -43,13 +51,14 @@ class PowerShellAssessmentRunner:
                 )
 
                 assert process.stdout is not None
-                for line in process.stdout:
-                    RunLog.objects.create(run=run, stream="stdout", message=line.rstrip())
+                exit_code, cancellation_requested = self._monitor_process(run, process)
 
-                exit_code = process.wait()
                 run.exit_code = exit_code
                 run.completed_at = timezone.now()
-                if exit_code == 0:
+                if cancellation_requested or self._is_cancelled(run):
+                    run.status = AssessmentRun.Status.CANCELLED
+                    run.error_message = "Assessment run was cancelled."
+                elif exit_code == 0:
                     run.status = AssessmentRun.Status.COMPLETED
                     self._record_artifacts(run, output_dir)
                 else:
@@ -58,12 +67,64 @@ class PowerShellAssessmentRunner:
             run.save()
             return run
         except Exception as exc:
-            run.status = AssessmentRun.Status.FAILED
             run.completed_at = timezone.now()
-            run.error_message = str(exc)
+            if self._is_cancelled(run):
+                run.status = AssessmentRun.Status.CANCELLED
+                run.error_message = "Assessment run was cancelled."
+            else:
+                run.status = AssessmentRun.Status.FAILED
+                run.error_message = str(exc)
             run.save()
             RunLog.objects.create(run=run, stream="stderr", message=str(exc))
             return run
+
+    def _monitor_process(self, run, process):
+        output_queue = queue.Queue()
+
+        def read_stdout():
+            try:
+                for line in process.stdout:
+                    output_queue.put(line)
+            finally:
+                output_queue.put(None)
+
+        threading.Thread(target=read_stdout, daemon=True).start()
+        stdout_closed = False
+        cancellation_requested = False
+
+        while True:
+            try:
+                line = output_queue.get(timeout=1)
+            except queue.Empty:
+                line = None
+            else:
+                if line is None:
+                    stdout_closed = True
+                else:
+                    RunLog.objects.create(run=run, stream="stdout", message=line.rstrip())
+
+            if not cancellation_requested and self._is_cancelled(run):
+                cancellation_requested = True
+                RunLog.objects.create(run=run, stream="stderr", message="Cancellation requested. Stopping assessment process.")
+                self._terminate_process(process)
+
+            if stdout_closed and process.poll() is not None:
+                break
+
+        return process.wait(), cancellation_requested
+
+    def _terminate_process(self, process):
+        if process.poll() is not None:
+            return
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+    def _is_cancelled(self, run):
+        return AssessmentRun.objects.filter(pk=run.pk, status=AssessmentRun.Status.CANCELLED).exists()
 
     def _build_environment(self, run, output_dir):
         tenant = run.tenant_profile

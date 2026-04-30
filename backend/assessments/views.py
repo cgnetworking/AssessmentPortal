@@ -3,9 +3,11 @@ from functools import wraps
 
 from django.contrib.auth import logout
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .audit import audit_metadata_diff, record_audit_event, tenant_audit_snapshot
@@ -294,6 +296,32 @@ def run_detail(request, run_id):
             "results": list(run.results.values("test_id", "pillar", "name", "status", "risk", "recommendation", "evidence")),
         }
     )
+
+
+@require_auth
+@require_permission("runAssessments")
+def run_cancel(request, run_id):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    with transaction.atomic():
+        run = get_object_or_404(AssessmentRun.objects.select_for_update().select_related("tenant_profile"), id=run_id)
+        if run.status not in {AssessmentRun.Status.QUEUED, AssessmentRun.Status.RUNNING}:
+            return JsonResponse({"detail": "Only queued or running assessments can be cancelled.", "run": run_to_dict(run)}, status=409)
+
+        previous_status = run.status
+        run.status = AssessmentRun.Status.CANCELLED
+        run.completed_at = timezone.now()
+        run.error_message = "Cancellation requested." if previous_status == AssessmentRun.Status.RUNNING else "Assessment run was cancelled."
+        run.save(update_fields=["status", "completed_at", "error_message", "updated_at"])
+
+    record_audit_event(
+        request=request,
+        action=AuditEvent.Action.ASSESSMENT_CANCELLED,
+        target=run,
+        metadata={"previousStatus": previous_status, "tenantProfileId": str(run.tenant_profile_id)},
+    )
+    return JsonResponse({"run": run_to_dict(run)})
 
 
 @require_auth

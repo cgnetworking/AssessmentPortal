@@ -119,6 +119,7 @@ class AuditEvent(models.Model):
         TENANT_DELETED = "tenant_deleted", "Tenant deleted"
         CERTIFICATE_CREATED = "certificate_created", "Certificate created"
         ASSESSMENT_QUEUED = "assessment_queued", "Assessment queued"
+        ASSESSMENT_CANCELLED = "assessment_cancelled", "Assessment cancelled"
         RUN_VIEWED = "run_viewed", "Run viewed"
         AUDIT_LOG_VIEWED = "audit_log_viewed", "Audit log viewed"
 

@@ -117,6 +117,7 @@ class Migration(migrations.Migration):
                             ("tenant_deleted", "Tenant deleted"),
                             ("certificate_created", "Certificate created"),
                             ("assessment_queued", "Assessment queued"),
+                            ("assessment_cancelled", "Assessment cancelled"),
                             ("run_viewed", "Run viewed"),
                             ("audit_log_viewed", "Audit log viewed"),
                         ],

@@ -531,6 +531,15 @@ a {
   padding: 0;
 }
 
+.link-button.danger-link {
+  color: var(--danger-text);
+}
+
+.link-button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .logs {
   margin: 0;
   overflow-x: auto;
