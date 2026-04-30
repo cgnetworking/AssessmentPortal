@@ -1,4 +1,6 @@
 import json
+import logging
+import uuid
 from functools import wraps
 
 from django.contrib.auth import logout
@@ -12,9 +14,14 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .audit import audit_metadata_diff, record_audit_event, tenant_audit_snapshot
 from .models import AssessmentRun, AuditEvent, ReportArtifact, TenantProfile
+from .redaction import redact_sensitive_text
 from .roles import require_permission, user_permissions, user_roles
 from .serializers import audit_event_to_dict, log_to_dict, run_to_dict, tenant_to_dict
 from .services.certificates import create_certificate_for_tenant, get_public_certificate_der
+
+
+logger = logging.getLogger(__name__)
+RUN_DETAIL_LOG_LIMIT = 500
 
 
 class BadJsonBody(ValueError):
@@ -33,8 +40,8 @@ def parse_json(request):
     return data
 
 
-def bad_json_response(exc):
-    return JsonResponse({"detail": str(exc)}, status=400)
+def bad_json_response(_exc):
+    return JsonResponse({"detail": "Request body must be a valid JSON object."}, status=400)
 
 
 def validation_error_response(exc):
@@ -43,6 +50,19 @@ def validation_error_response(exc):
     else:
         errors = {"nonFieldErrors": exc.messages}
     return JsonResponse({"detail": "Validation failed.", "errors": errors}, status=400)
+
+
+def safe_error_response(request, exc, *, detail, status, log_message):
+    error_id = uuid.uuid4().hex
+    logger.warning(
+        "%s error_id=%s path=%s exception_type=%s detail=%s",
+        log_message,
+        error_id,
+        getattr(request, "path", ""),
+        exc.__class__.__name__,
+        redact_sensitive_text(exc),
+    )
+    return JsonResponse({"detail": detail, "errorId": error_id}, status=status)
 
 
 def require_auth(view_func):
@@ -230,9 +250,21 @@ def tenant_certificate(request, tenant_id):
         before = tenant_audit_snapshot(tenant)
         created = create_certificate_for_tenant(tenant)
     except ImproperlyConfigured as exc:
-        return JsonResponse({"detail": str(exc)}, status=400)
+        return safe_error_response(
+            request,
+            exc,
+            detail="Certificate service is not configured.",
+            status=400,
+            log_message="Certificate configuration error",
+        )
     except Exception as exc:
-        return JsonResponse({"detail": f"Certificate creation failed: {exc}"}, status=502)
+        return safe_error_response(
+            request,
+            exc,
+            detail="Certificate creation failed.",
+            status=502,
+            log_message="Certificate creation failed",
+        )
 
     tenant.certificate_thumbprint = created.certificate_thumbprint
     tenant.key_vault_certificate_uri = created.key_vault_certificate_uri
@@ -262,9 +294,21 @@ def tenant_certificate_download(request, tenant_id):
     try:
         certificate_der = get_public_certificate_der(tenant)
     except (ImproperlyConfigured, ValidationError) as exc:
-        return JsonResponse({"detail": str(exc)}, status=400)
+        return safe_error_response(
+            request,
+            exc,
+            detail="Certificate download could not be completed.",
+            status=400,
+            log_message="Certificate download validation error",
+        )
     except Exception as exc:
-        return JsonResponse({"detail": f"Certificate download failed: {exc}"}, status=502)
+        return safe_error_response(
+            request,
+            exc,
+            detail="Certificate download failed.",
+            status=502,
+            log_message="Certificate download failed",
+        )
 
     filename = f"{tenant.display_name or tenant.tenant_id}.cer".replace("/", "-").replace("\\", "-")
     response = HttpResponse(certificate_der, content_type="application/x-x509-ca-cert")
@@ -310,6 +354,8 @@ def run_collection(request):
 @require_permission("viewResults")
 def run_detail(request, run_id):
     run = get_object_or_404(AssessmentRun, id=run_id)
+    logs = list(run.logs.order_by("-created_at", "-id")[:RUN_DETAIL_LOG_LIMIT])
+    logs.reverse()
     record_audit_event(
         request=request,
         action=AuditEvent.Action.RUN_VIEWED,
@@ -319,7 +365,8 @@ def run_detail(request, run_id):
     return JsonResponse(
         {
             "run": run_to_dict(run),
-            "logs": [log_to_dict(log) for log in run.logs.all()],
+            "logs": [log_to_dict(log) for log in logs],
+            "logsTruncated": run.logs.count() > RUN_DETAIL_LOG_LIMIT,
             "results": list(run.results.values("test_id", "pillar", "name", "status", "risk", "recommendation", "evidence")),
         }
     )

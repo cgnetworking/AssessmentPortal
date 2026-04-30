@@ -239,7 +239,11 @@ function Connect-ZtAssessment {
 					$connectMgGraphParams.ContextScope = 'Process'
 				}
 
-				Write-PSFMessage -Message "Connecting to Microsoft Graph with params: $($connectMgGraphParams | Out-String)" -Level Verbose
+				$safeConnectMgGraphParams = $connectMgGraphParams.Clone()
+				if ($safeConnectMgGraphParams.ContainsKey('Certificate')) {
+					$safeConnectMgGraphParams.Certificate = '[REDACTED_CERTIFICATE]'
+				}
+				Write-PSFMessage -Message "Connecting to Microsoft Graph with params: $($safeConnectMgGraphParams | Out-String)" -Level Verbose
 				$null = Connect-MgGraph @connectMgGraphParams -ErrorAction Stop
 				$contextTenantId = (Get-MgContext).TenantId
 				Write-Host -Object "   ✅ Connected" -ForegroundColor Green

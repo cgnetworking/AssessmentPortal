@@ -25,7 +25,7 @@ def tenant_audit_snapshot(tenant):
         "tenantId": tenant.tenant_id,
         "clientId": tenant.client_id,
         "certificateThumbprint": tenant.certificate_thumbprint,
-        "keyVaultCertificateUri": tenant.key_vault_certificate_uri,
+        "keyVaultCertificateConfigured": bool(tenant.key_vault_certificate_uri),
     }
 
 

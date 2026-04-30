@@ -1,3 +1,6 @@
+from .redaction import redact_sensitive_data, redact_sensitive_text
+
+
 def tenant_to_dict(tenant, include_key_vault_certificate_uri=False):
     data = {
         "id": str(tenant.id),
@@ -24,7 +27,7 @@ def run_to_dict(run):
         "startedAt": run.started_at.isoformat() if run.started_at else None,
         "completedAt": run.completed_at.isoformat() if run.completed_at else None,
         "exitCode": run.exit_code,
-        "errorMessage": run.error_message,
+        "errorMessage": redact_sensitive_text(run.error_message),
         "hasReport": has_report,
         "createdAt": run.created_at.isoformat(),
         "updatedAt": run.updated_at.isoformat(),
@@ -36,7 +39,7 @@ def log_to_dict(log):
         "id": log.id,
         "runId": str(log.run_id),
         "stream": log.stream,
-        "message": log.message,
+        "message": redact_sensitive_text(log.message),
         "createdAt": log.created_at.isoformat(),
     }
 
@@ -59,5 +62,5 @@ def audit_event_to_dict(event):
         "assessmentRunId": str(event.assessment_run_id) if event.assessment_run_id else None,
         "sourceIp": event.source_ip,
         "userAgent": event.user_agent,
-        "metadata": event.metadata,
+        "metadata": redact_sensitive_data(event.metadata),
     }

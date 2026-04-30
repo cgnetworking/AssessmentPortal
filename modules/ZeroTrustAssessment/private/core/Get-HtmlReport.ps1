@@ -42,7 +42,7 @@ function Get-HtmlReport {
     $json = Get-Content -Path $resultsJsonPath -Raw
     Remove-Item -Path $resultsJsonPath -Force -ErrorAction SilentlyContinue | Out-Null
 
-    Write-PSFMessage -Message $json -Level Debug
+    Write-PSFMessage -Message ('Assessment report JSON generated ({0} characters).' -f $json.Length) -Level Debug
     $htmlFilePath = Join-Path -Path $script:ModuleRoot -ChildPath 'assets/ReportTemplate.html'
     $templateHtml = Get-Content -Path $htmlFilePath -Raw
 

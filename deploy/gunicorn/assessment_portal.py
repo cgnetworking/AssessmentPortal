@@ -7,3 +7,4 @@ keepalive = 5
 accesslog = "-"
 errorlog = "-"
 capture_output = True
+access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(m)s %(U)s %(H)s" %(s)s %(b)s "%(a)s"'

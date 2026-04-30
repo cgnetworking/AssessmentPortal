@@ -122,12 +122,7 @@ def _key_vault_request(method, vault_url, path, **kwargs):
     if response.ok:
         return response.json()
 
-    try:
-        payload = response.json()
-        message = payload.get("error", {}).get("message") or payload.get("error", {}).get("code")
-    except ValueError:
-        message = response.text
-    raise ValidationError(f"Key Vault request failed ({response.status_code}): {message}")
+    raise ValidationError(f"Key Vault request failed with status {response.status_code}.")
 
 
 def _generate_certificate(tenant):

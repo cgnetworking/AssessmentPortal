@@ -84,17 +84,18 @@
 	$isInCache = $script:__ZtSession.GraphCache.Value.ContainsKey($cacheKey)
 	$isMethodGet = $Method -eq 'GET'
 
+	$safeGraphPath = $Uri.GetLeftPart([System.UriPartial]::Path)
 	if (-not $cacheBlocked -and -not $DisableCache -and -not $isBatch -and $isInCache -and $isMethodGet) {
 		# Don't read from cache for batch requests.
-		Write-PSFMessage "Using graph cache: $($cacheKey)" -Level Debug
+		Write-PSFMessage "Using graph cache: $safeGraphPath" -Level Debug
 		$results = $script:__ZtSession.GraphCache.Value[$cacheKey]
 		if ($results) {
 			return $results
 		}
 	}
 
-	Write-PSFMessage "Invoking Graph: $($Uri.AbsoluteUri)" -Level Debug -Tag Graph
-	Write-PSFMessage ([string]::IsNullOrEmpty($Body)) -Level Debug -Tag Graph
+	Write-PSFMessage "Invoking Graph: $safeGraphPath" -Level Debug -Tag Graph
+	Write-PSFMessage ("Graph request has body: {0}" -f (-not [string]::IsNullOrEmpty($Body))) -Level Debug -Tag Graph
 
 	# Throttling
 	$relativeUrl = ($Uri.LocalPath -split '/',2)[1]

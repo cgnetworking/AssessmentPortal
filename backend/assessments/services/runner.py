@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from assessments.models import AssessmentRun, ReportArtifact, RunLog
+from assessments.redaction import redact_sensitive_text
 
 
 MAX_RUN_SECONDS = 24 * 60 * 60
@@ -95,9 +96,9 @@ class PowerShellAssessmentRunner:
                 run.error_message = "Assessment run was cancelled."
             else:
                 run.status = AssessmentRun.Status.FAILED
-                run.error_message = str(exc)
+                run.error_message = redact_sensitive_text(exc)
             self._save_completion_if_not_cancelled(run)
-            RunLog.objects.create(run=run, stream="stderr", message=str(exc))
+            self._record_log(run, "stderr", exc)
             return run
 
     def _monitor_process(self, run, process):
@@ -125,22 +126,25 @@ class PowerShellAssessmentRunner:
                 if line is None:
                     stdout_closed = True
                 else:
-                    RunLog.objects.create(run=run, stream="stdout", message=line.rstrip())
+                    self._record_log(run, "stdout", line.rstrip())
 
             if not cancellation_requested and self._is_cancelled(run):
                 cancellation_requested = True
-                RunLog.objects.create(run=run, stream="stderr", message="Cancellation requested. Stopping assessment process.")
+                self._record_log(run, "stderr", "Cancellation requested. Stopping assessment process.")
                 self._terminate_process(process)
 
             if not timed_out and time.monotonic() >= deadline:
                 timed_out = True
-                RunLog.objects.create(run=run, stream="stderr", message="Assessment exceeded the 24 hour maximum runtime. Stopping assessment process.")
+                self._record_log(run, "stderr", "Assessment exceeded the 24 hour maximum runtime. Stopping assessment process.")
                 self._terminate_process(process)
 
             if stdout_closed and process.poll() is not None:
                 break
 
         return process.wait(), cancellation_requested, timed_out
+
+    def _record_log(self, run, stream, message):
+        RunLog.objects.create(run=run, stream=stream, message=redact_sensitive_text(message))
 
     def _terminate_process(self, process):
         if process.poll() is not None:
