@@ -234,6 +234,17 @@ class Migration(migrations.Migration):
                 "ordering": ["created_at", "id"],
             },
         ),
+        migrations.CreateModel(
+            name="AdminLoginRateLimitBucket",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("key", models.CharField(max_length=200, unique=True)),
+                ("scope", models.CharField(max_length=64)),
+                ("count", models.PositiveIntegerField(default=0)),
+                ("window_start", models.DateTimeField()),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+            ],
+        ),
         migrations.AddIndex(
             model_name="assessmentresult",
             index=models.Index(fields=["run", "test_id"], name="assessment_run_id_16f5ee_idx"),
@@ -257,6 +268,14 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="auditevent",
             index=models.Index(fields=["target_type", "target_id"], name="assessment_target__926d37_idx"),
+        ),
+        migrations.AddIndex(
+            model_name="adminloginratelimitbucket",
+            index=models.Index(fields=["scope", "updated_at"], name="assessment_scope_9885f4_idx"),
+        ),
+        migrations.AddIndex(
+            model_name="adminloginratelimitbucket",
+            index=models.Index(fields=["updated_at"], name="assessment_updated_6efe2c_idx"),
         ),
         migrations.AddConstraint(
             model_name="tenantprofile",

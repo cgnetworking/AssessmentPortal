@@ -158,3 +158,17 @@ class AuditEvent(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Audit events are immutable.")
+
+
+class AdminLoginRateLimitBucket(models.Model):
+    key = models.CharField(max_length=200, unique=True)
+    scope = models.CharField(max_length=64)
+    count = models.PositiveIntegerField(default=0)
+    window_start = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["scope", "updated_at"], name="assessment_scope_9885f4_idx"),
+            models.Index(fields=["updated_at"], name="assessment_updated_6efe2c_idx"),
+        ]

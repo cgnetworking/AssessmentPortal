@@ -44,6 +44,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "assessments.middleware.AdminLoginRateLimitMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "social_django.middleware.SocialAuthExceptionMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -135,6 +136,25 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("DJANGO_SECURE_HSTS_INCLUDE_SUBD
 SECURE_HSTS_PRELOAD = os.environ.get("DJANGO_SECURE_HSTS_PRELOAD", "0") == "1"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+ADMIN_LOGIN_RATE_LIMITS = {
+    # One IP address trying one username with many passwords.
+    "username_ip": {
+        "limit": int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_USERNAME_IP_LIMIT", "5")),
+        "window_seconds": int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_USERNAME_IP_WINDOW_SECONDS", "300")),
+    },
+    # Many IP addresses trying one username with many passwords.
+    "username": {
+        "limit": int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_USERNAME_LIMIT", "20")),
+        "window_seconds": int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_USERNAME_WINDOW_SECONDS", "3600")),
+    },
+    # One IP address trying many usernames with a few common passwords.
+    "ip": {
+        "limit": int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_IP_LIMIT", "30")),
+        "window_seconds": int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_IP_WINDOW_SECONDS", "300")),
+    },
+}
+ADMIN_LOGIN_RATE_LIMIT_RETENTION_SECONDS = int(os.environ.get("ADMIN_LOGIN_RATE_LIMIT_RETENTION_SECONDS", "86400"))
 
 ZTA_MODULE_PATH = Path(os.environ.get("ZTA_MODULE_PATH", REPO_ROOT / "modules" / "ZeroTrustAssessment"))
 ZTA_RUNNER_SCRIPT = Path(os.environ.get("ZTA_RUNNER_SCRIPT", BASE_DIR / "assessments" / "powershell" / "run_assessment.ps1"))
