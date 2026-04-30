@@ -9,16 +9,16 @@ param(
 
     [string] $Location = "eastus",
     [string] $NamePrefix = "assessmentportal",
-    [string] $VNetName = "vnet-assessmentportal",
+    [string] $VNetName,
     [string] $VNetAddressPrefix = "10.0.0.0/24",
 
     [string] $AppSubnetName = "snet-app",
     [string] $AppSubnetPrefix = "10.0.0.0/26",
 
-    [string] $PostgresSubnetName = "snet-psqldb-pe",
+    [string] $PostgresSubnetName = "snet-postgres-pe",
     [string] $PostgresSubnetPrefix = "10.0.0.64/26",
 
-    [string] $KeyVaultSubnetName = "snet-kv-pe",
+    [string] $KeyVaultSubnetName = "snet-keyvault-pe",
     [string] $KeyVaultSubnetPrefix = "10.0.0.128/26",
 
     [string] $ReservedSubnetName = "snet-reserved",
@@ -59,10 +59,10 @@ param(
     [string] $KeyVaultPrivateDnsLinkName = "link-keyvault",
     [string] $PrivateDnsZoneGroupName = "default",
 
-    [string] $PostgresPrivateEndpointName = "pep-psqldb-assessmentportal",
-    [string] $KeyVaultPrivateEndpointName = "pep-kv-assessmentportal",
-    [string] $PostgresPrivateEndpointConnectionName = "psc-psqldb-assessmentportal",
-    [string] $KeyVaultPrivateEndpointConnectionName = "psc-kv-assessmentportal",
+    [string] $PostgresPrivateEndpointName,
+    [string] $KeyVaultPrivateEndpointName,
+    [string] $PostgresPrivateEndpointConnectionName = "psc-postgres",
+    [string] $KeyVaultPrivateEndpointConnectionName = "psc-keyvault",
     [string] $PostgresPrivateEndpointGroupId = "postgresqlServer",
     [string] $KeyVaultPrivateEndpointGroupId = "vault",
     [string] $PostgresPrivateDnsConfigName = "postgres",
@@ -89,18 +89,29 @@ if (-not $context) {
 
 # Generate globally unique names when the caller does not provide them.
 $suffix = Get-Random -Minimum 10000 -Maximum 99999
+$baseName = $NamePrefix.ToLowerInvariant()
 if (-not $ResourceGroupName) {
-    $ResourceGroupName = "rg-$NamePrefix-dev"
+    $ResourceGroupName = "rg-$baseName-dev"
+}
+if (-not $VNetName) {
+    $VNetName = "vnet-$baseName"
 }
 if (-not $PostgresServerName) {
-    $PostgresServerName = "psqldb-$NamePrefix-$suffix".ToLowerInvariant()
+    $PostgresServerName = "psqldb-$baseName-$suffix"
 }
 if (-not $KeyVaultName) {
-    $KeyVaultName = "kv-$($NamePrefix -replace '[^a-zA-Z0-9-]', '')-$suffix".ToLowerInvariant()
+    $keyVaultBaseName = $baseName -replace '[^a-zA-Z0-9-]', ''
+    $KeyVaultName = "kv-$keyVaultBaseName-$suffix"
     if ($KeyVaultName.Length -gt 24) {
         $KeyVaultName = $KeyVaultName.Substring(0, 24)
     }
     $KeyVaultName = $KeyVaultName.Trim("-")
+}
+if (-not $PostgresPrivateEndpointName) {
+    $PostgresPrivateEndpointName = "pep-$baseName-postgres"
+}
+if (-not $KeyVaultPrivateEndpointName) {
+    $KeyVaultPrivateEndpointName = "pep-$baseName-keyvault"
 }
 
 # Create the resource group that will hold the dev/test infrastructure.
