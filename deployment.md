@@ -74,20 +74,12 @@ Set these values:
 - `AZUREAD_AUTH_TENANT_ID`
 - `ZTA_KEY_VAULT_URL`
 
-Do not configure these values:
-
-- `POSTGRES_PASSWORD`
-- `DATABASE_URL`
-- `ZT_POSTGRES_CONNECTION_STRING`
-
 ## 5. Start Services
 
 After replacing placeholder environment values, start the app:
 
 ```bash
-sudo systemctl restart assessmentportal-gunicorn assessmentportal-worker
-sudo nginx -t
-sudo systemctl reload nginx
+sudo /opt/assessmentportal/deploy/scripts/restart_services.sh
 ```
 
 If the setup script stopped before starting services because placeholders were present, you can also rerun the setup script without repeating Node.js, PowerShell, or frontend work:
@@ -125,20 +117,3 @@ After users sign in for the first time, assign them to one of these Django group
 - `Reader`
 
 The groups are created by Django migration, but user membership is manual.
-
-## 8. Add Tenant Profiles
-
-For each tenant assessment profile, use app-only certificate authentication.
-
-Certificate private keys must remain in Azure Key Vault. Store only certificate metadata in the portal, such as:
-
-- Tenant ID
-- Client ID
-- Certificate thumbprint
-- Key Vault certificate URI
-
-To create certificates from the portal UI, set `ZTA_KEY_VAULT_URL` to the target vault URL, such as `https://example.vault.azure.net`. The Key Vault URL is environment-only configuration and cannot be set from the UI or tenant profile API. The Linux server uses its system-assigned managed identity to create a self-signed PFX certificate, imports it as an exportable Key Vault certificate object in the configured vault, and saves the resulting certificate URI and thumbprint on the tenant profile. The managed identity needs `certificates/import` and `certificates/get` for the portal action, and `secrets/get` for the assessment runner to load the certificate object's backing PFX secret at runtime.
-
-The public `.cer` download contains only the public certificate. Upload that `.cer` to the Microsoft Entra app registration identified by the tenant profile Client ID before running assessments with the new certificate.
-
-Do not use password, delegated user, interactive browser, device code, client secret, or locally installed certificate-store authentication paths for tenant assessments.

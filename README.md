@@ -54,6 +54,14 @@ The backend persists:
 
 Tenant profiles contain metadata required to run assessments, including tenant ID, app client ID, certificate thumbprint, and Key Vault certificate URI.
 
+## Tenant Certificate Workflow
+
+The portal can create a self-signed certificate for a tenant profile when `ZTA_KEY_VAULT_URL` is configured. The server imports the generated PFX as an exportable Key Vault certificate object and stores the returned certificate URI and thumbprint on the tenant profile.
+
+The downloaded `.cer` file contains only the public certificate. Upload that `.cer` to the Microsoft Entra app registration identified by the tenant profile client ID before running assessments with the new certificate.
+
+The portal host's managed identity needs `certificates/import` and `certificates/get` for certificate creation and public certificate download. The assessment runner also needs `secrets/get` to load the certificate object's backing PFX secret at runtime.
+
 ## Authorization
 
 Users authenticate through Microsoft Entra ID and are authorized through Django groups.
