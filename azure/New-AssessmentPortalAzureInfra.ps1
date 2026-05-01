@@ -77,15 +77,28 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Use the requested subscription, or the caller's current Azure context.
-if ($SubscriptionId) {
-    Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
-}
-
 $context = Get-AzContext
 if (-not $context) {
     throw "Run Connect-AzAccount before this script."
 }
+
+# Use the requested subscription, or the caller's current Azure context.
+if ($SubscriptionId) {
+    $targetSubscription = Get-AzSubscription -SubscriptionId $SubscriptionId -ErrorAction Stop
+} else {
+    if (-not $context.Subscription -or -not $context.Subscription.Id) {
+        throw "No Azure subscription is selected. Pass -SubscriptionId or run Set-AzContext first."
+    }
+    $targetSubscription = Get-AzSubscription -SubscriptionId $context.Subscription.Id -ErrorAction Stop
+}
+
+$targetTenantId = $targetSubscription.TenantId
+if (-not $targetTenantId) {
+    throw "Could not determine the Microsoft Entra tenant for subscription '$($targetSubscription.Id)'."
+}
+
+Set-AzContext -SubscriptionId $targetSubscription.Id -Tenant $targetTenantId | Out-Null
+$context = Get-AzContext
 
 # Generate globally unique names when the caller does not provide them.
 $suffix = Get-Random -Minimum 10000 -Maximum 99999
@@ -233,7 +246,7 @@ New-AzResourceGroupDeployment `
     -TemplateObject $postgresTemplate `
     -serverName $PostgresServerName `
     -databaseName $PostgresDatabaseName `
-    -tenantId $context.Tenant.Id `
+    -tenantId $targetTenantId `
     -entraAdminObjectId $PostgresEntraAdminObjectId `
     -entraAdminName $PostgresEntraAdminName `
     -entraAdminType $PostgresEntraAdminType | Out-Null
