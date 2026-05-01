@@ -46,7 +46,7 @@ param(
     [Parameter(Mandatory)]
     [string] $PostgresEntraAdminName,
 
-    [string] $PostgresEntraAdminType = "Group",
+    [string] $PostgresEntraAdminType = "User",
 
     [string] $KeyVaultName,
     [string] $KeyVaultSku = "Standard",
