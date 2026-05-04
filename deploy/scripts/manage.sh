@@ -22,10 +22,38 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
     exit 1
 fi
 
-set -a
-# shellcheck source=/dev/null
-. "${ENV_FILE}"
-set +a
+while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ "${line}" == export[[:space:]]* ]] && line="${line#export}"
+    line="${line#"${line%%[![:space:]]*}"}"
+
+    if [[ "${line}" != *=* ]]; then
+        echo "Invalid environment line in ${ENV_FILE}: ${line}" >&2
+        exit 1
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+
+    if [[ ! "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        echo "Invalid environment key in ${ENV_FILE}: ${key}" >&2
+        exit 1
+    fi
+
+    if [[ "${value}" == \"*\" && "${value}" == *\" && "${#value}" -ge 2 ]]; then
+        value="${value:1:${#value}-2}"
+    elif [[ "${value}" == \'*\' && "${value}" == *\' && "${#value}" -ge 2 ]]; then
+        value="${value:1:${#value}-2}"
+    fi
+
+    export "${key}=${value}"
+done < "${ENV_FILE}"
 
 cd "${INSTALL_DIR}/backend"
 
