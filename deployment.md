@@ -20,6 +20,27 @@ https://<host>/auth/complete/azuread-tenant-oauth2/
 
 The portal backend, database token flow, and Key Vault certificate actions use the host's system-assigned managed identity.
 
+Create the PostgreSQL role for the portal host's managed identity before running Django migrations. Connect to the `postgres` database as a Microsoft Entra PostgreSQL administrator and run:
+
+```sql
+select * from pg_catalog.pgaadauth_create_principal('<managed-identity-resource-name>', false, false);
+```
+
+Then connect to the application database and grant the role permission to create and use objects in the `public` schema:
+
+```sql
+GRANT CONNECT ON DATABASE assessment_portal TO "<managed-identity-resource-name>";
+GRANT USAGE, CREATE ON SCHEMA public TO "<managed-identity-resource-name>";
+ALTER ROLE "<managed-identity-resource-name>" IN DATABASE assessment_portal SET search_path TO public;
+```
+
+Set `POSTGRES_USER` in `/etc/assessmentportal/assessmentportal.env` to the same managed identity resource name used for the PostgreSQL role. If tables were created earlier by a different owner, also grant access to those existing objects from the application database:
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "<managed-identity-resource-name>";
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO "<managed-identity-resource-name>";
+```
+
 ## 2. Prepare The Host
 
 Use an Ubuntu 24.04 or newer host.
