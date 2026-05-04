@@ -201,6 +201,25 @@ function Add-ZtRequiredModulesPath {
     }
 }
 
+function Import-ZtRequiredModule {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    try {
+        Import-Module -Name $Name -ErrorAction Stop
+    }
+    catch {
+        $details = @(
+            $_.Exception.Message
+            $_.ScriptStackTrace
+            $_ | Out-String
+        ) | Where-Object { $_ } | Select-Object -Unique
+        throw "Unable to load required PowerShell module '$Name'. $($details -join "`n")"
+    }
+}
+
 $modulePath = $env:ZTA_MODULE_PATH
 if (-not $modulePath) {
     throw 'ZTA_MODULE_PATH is required.'
@@ -213,6 +232,9 @@ $outputPath = $env:ZTA_OUTPUT_PATH
 $pillar = if ($env:ZTA_PILLAR) { $env:ZTA_PILLAR } else { 'All' }
 Add-ZtRequiredModulesPath
 Import-Module (Join-Path $modulePath 'ZeroTrustAssessment.psd1') -Force
+Import-ZtRequiredModule -Name 'Microsoft.Graph.Authentication'
+Import-ZtRequiredModule -Name 'ExchangeOnlineManagement'
+Import-ZtRequiredModule -Name 'Microsoft.Online.SharePoint.PowerShell'
 
 $certificate = Get-ZtCertificateFromKeyVault -CertificateUri $certificateUri
 
