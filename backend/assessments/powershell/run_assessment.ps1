@@ -122,6 +122,23 @@ function ConvertTo-ZtSharePointAdminUrl {
     return "https://$tenantName-admin.sharepoint.com"
 }
 
+function Add-ZtRequiredModulesPath {
+    $requiredModulesPath = $env:ZTA_REQUIRED_MODULES_PATH
+    if (-not $requiredModulesPath) {
+        if (-not $env:HOME) {
+            return
+        }
+        $requiredModulesPath = Join-Path $env:HOME '.cache/ZeroTrustAssessment/Modules'
+    }
+
+    $separator = [System.IO.Path]::PathSeparator
+    $modulePath = @($env:PSModulePath -split $separator | Where-Object { $_ })
+    $normalizedModulePath = $modulePath | ForEach-Object { $_.TrimEnd([System.IO.Path]::DirectorySeparatorChar) }
+    if ($requiredModulesPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar) -notin $normalizedModulePath) {
+        $env:PSModulePath = (@($requiredModulesPath) + $modulePath) -join $separator
+    }
+}
+
 $modulePath = $env:ZTA_MODULE_PATH
 if (-not $modulePath) {
     throw 'ZTA_MODULE_PATH is required.'
@@ -132,6 +149,7 @@ $clientId = $env:ZTA_CLIENT_ID
 $certificateUri = $env:ZTA_KEY_VAULT_CERTIFICATE_URI
 $outputPath = $env:ZTA_OUTPUT_PATH
 $pillar = if ($env:ZTA_PILLAR) { $env:ZTA_PILLAR } else { 'All' }
+Add-ZtRequiredModulesPath
 Import-Module (Join-Path $modulePath 'ZeroTrustAssessment.psd1') -Force
 
 $certificate = Get-ZtCertificateFromKeyVault -CertificateUri $certificateUri
