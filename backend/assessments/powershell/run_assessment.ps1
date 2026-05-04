@@ -12,36 +12,86 @@ function ConvertTo-ZtCertificate {
     return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($bytes, $null, $flags)
 }
 
+function Add-ZtUriQueryParameter {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Uri,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable] $Query
+    )
+
+    $builder = [System.UriBuilder]::new($Uri)
+    $queryParameters = [ordered]@{}
+    if ($builder.Query) {
+        foreach ($pair in $builder.Query.TrimStart('?').Split('&', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $parts = $pair.Split('=', 2)
+            $key = [uri]::UnescapeDataString($parts[0])
+            $value = if ($parts.Count -gt 1) { [uri]::UnescapeDataString($parts[1]) } else { '' }
+            $queryParameters[$key] = $value
+        }
+    }
+
+    foreach ($key in $Query.Keys) {
+        if ($null -ne $Query[$key] -and $Query[$key] -ne '') {
+            $queryParameters[$key] = [string]$Query[$key]
+        }
+    }
+
+    $encodedQuery = foreach ($key in $queryParameters.Keys) {
+        '{0}={1}' -f [uri]::EscapeDataString($key), [uri]::EscapeDataString($queryParameters[$key])
+    }
+    $builder.Query = $encodedQuery -join '&'
+    return $builder.Uri.AbsoluteUri
+}
+
 function Get-ZtManagedIdentityToken {
     param(
         [Parameter(Mandatory = $true)]
         [string] $Resource
     )
 
-    $encodedResource = [uri]::EscapeDataString($Resource)
     $managedIdentityClientId = $env:AZURE_CLIENT_ID
 
     if ($env:IDENTITY_ENDPOINT -and $env:IDENTITY_HEADER) {
-        $uri = "$($env:IDENTITY_ENDPOINT)?api-version=2019-08-01&resource=$encodedResource"
-        if ($managedIdentityClientId) {
-            $uri = "$uri&client_id=$([uri]::EscapeDataString($managedIdentityClientId))"
+        $query = @{
+            'api-version' = '2019-08-01'
+            resource = $Resource
         }
+        if ($managedIdentityClientId) {
+            $query['client_id'] = $managedIdentityClientId
+        }
+        $uri = Add-ZtUriQueryParameter -Uri $env:IDENTITY_ENDPOINT -Query $query
 
-        $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{
-            'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER
-        } -TimeoutSec 10 -ErrorAction Stop
+        try {
+            $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{
+                'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER
+            } -TimeoutSec 10 -ErrorAction Stop
+        }
+        catch {
+            throw "Managed identity token request failed for resource '$Resource' using IDENTITY_ENDPOINT. $($_.Exception.Message)"
+        }
         if (-not $response.access_token) {
             throw 'Managed identity token response did not include an access token.'
         }
         return $response.access_token
     }
 
-    $uri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$encodedResource"
-    if ($managedIdentityClientId) {
-        $uri = "$uri&client_id=$([uri]::EscapeDataString($managedIdentityClientId))"
+    $query = @{
+        'api-version' = '2018-02-01'
+        resource = $Resource
     }
+    if ($managedIdentityClientId) {
+        $query['client_id'] = $managedIdentityClientId
+    }
+    $uri = Add-ZtUriQueryParameter -Uri 'http://169.254.169.254/metadata/identity/oauth2/token' -Query $query
 
-    $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{ Metadata = 'true' } -TimeoutSec 10 -ErrorAction Stop
+    try {
+        $response = Invoke-RestMethod -Method GET -Uri $uri -Headers @{ Metadata = 'true' } -TimeoutSec 10 -ErrorAction Stop
+    }
+    catch {
+        throw "Managed identity token request failed for resource '$Resource' using IMDS. $($_.Exception.Message)"
+    }
     if (-not $response.access_token) {
         throw 'Managed identity token response did not include an access token.'
     }
@@ -69,10 +119,10 @@ function Resolve-ZtKeyVaultSecretUri {
     $vaultUrl = "$($parsedUri.Scheme)://$($parsedUri.Host)"
 
     if ($secretVersion) {
-        return "$vaultUrl/secrets/$secretName/$secretVersion?api-version=7.5"
+        return Add-ZtUriQueryParameter -Uri "$vaultUrl/secrets/$secretName/$secretVersion" -Query @{ 'api-version' = '7.5' }
     }
 
-    return "$vaultUrl/secrets/$secretName?api-version=7.5"
+    return Add-ZtUriQueryParameter -Uri "$vaultUrl/secrets/$secretName" -Query @{ 'api-version' = '7.5' }
 }
 
 function Get-ZtCertificateFromKeyVault {
@@ -83,9 +133,14 @@ function Get-ZtCertificateFromKeyVault {
 
     $token = Get-ZtManagedIdentityToken -Resource 'https://vault.azure.net'
     $secretUri = Resolve-ZtKeyVaultSecretUri -CertificateUri $CertificateUri
-    $secret = Invoke-RestMethod -Method GET -Uri $secretUri -Headers @{
-        Authorization = "Bearer $token"
-    } -TimeoutSec 30 -ErrorAction Stop
+    try {
+        $secret = Invoke-RestMethod -Method GET -Uri $secretUri -Headers @{
+            Authorization = "Bearer $token"
+        } -TimeoutSec 30 -ErrorAction Stop
+    }
+    catch {
+        throw "Key Vault certificate secret request failed. $($_.Exception.Message)"
+    }
 
     if (-not $secret.value) {
         throw 'Key Vault certificate secret did not contain a PFX value.'
