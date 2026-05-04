@@ -122,6 +122,8 @@ PrivateData = @{
 
     serviceConnectionOrder = @('Graph', 'Azure', 'AipService', 'SharePointOnline', 'ExchangeOnline', 'SecurityCompliance')
 
+    ExternalModuleDependencies = @()
+
     PSData = @{
         # Tags applied to this module. These help with module discovery in online galleries.
         Tags = 'Microsoft','Security','ZeroTrust','Entra','Intune'
@@ -143,9 +145,6 @@ PrivateData = @{
 
         # Flag to indicate whether the module requires explicit user acceptance for install/update/save
         # RequireLicenseAcceptance = $false
-
-        # External dependent modules of this module
-        # ExternalModuleDependencies = @()
 
     } # End of PSData hashtable
 
