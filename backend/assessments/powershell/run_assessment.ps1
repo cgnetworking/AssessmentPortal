@@ -150,7 +150,14 @@ function Get-ZtCertificateFromKeyVault {
 }
 
 function Get-ZtInitialTenantDomain {
-    $organization = Get-MgOrganization -Property VerifiedDomains | Select-Object -First 1
+    try {
+        $organizationResponse = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/organization?$select=verifiedDomains'
+    }
+    catch {
+        throw "Unable to query tenant organization from Microsoft Graph. $($_.Exception.Message)"
+    }
+
+    $organization = @($organizationResponse.value) | Select-Object -First 1
     if (-not $organization) {
         throw 'Unable to resolve tenant organization from Microsoft Graph.'
     }
