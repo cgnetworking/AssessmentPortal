@@ -75,6 +75,7 @@ def require_auth(view_func):
     return wrapped
 
 
+@require_auth
 def health(_request):
     return JsonResponse({"status": "ok"})
 
@@ -100,11 +101,11 @@ def auth_session(request):
     )
 
 
+@require_auth
 def auth_logout(request):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    if request.user.is_authenticated:
-        record_audit_event(request=request, action=AuditEvent.Action.LOGOUT, target=request.user, target_type="User")
+    record_audit_event(request=request, action=AuditEvent.Action.LOGOUT, target=request.user, target_type="User")
     logout(request)
     return JsonResponse({"authenticated": False})
 

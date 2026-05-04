@@ -117,11 +117,13 @@ Check service status:
 sudo systemctl status assessmentportal-gunicorn assessmentportal-worker
 ```
 
-Check the health endpoint:
+Check that unauthenticated requests are challenged:
 
 ```bash
-curl -fsS https://<host>/api/health/
+curl -i https://<host>/api/health/
 ```
+
+The expected response before sign-in is `401 Unauthorized`. Browser requests to the portal pages should redirect to Microsoft Entra sign-in before Nginx serves the frontend.
 
 Open the portal:
 
@@ -133,13 +135,13 @@ https://<host>/
 
 Create one local Django superuser before assigning application roles. This account is used to sign in to Django admin at `https://<host>/admin/`; normal portal users still authenticate through Microsoft Entra ID.
 
-Run this from the backend directory after migrations have completed:
+Run this after migrations have completed:
 
 ```bash
-python manage.py createsuperuser
+sudo /opt/assessmentportal/deploy/scripts/manage.sh createsuperuser
 ```
 
-On the deployed host, use the deployment virtual environment and make sure `/etc/assessmentportal/assessmentportal.env` is loaded before running the command.
+The wrapper loads `/etc/assessmentportal/assessmentportal.env`, changes into the deployed backend directory, and runs the command with the deployment virtual environment as the `assessmentportal` user. Running raw `python manage.py createsuperuser` without loading that environment will fail with errors such as `DJANGO_SECRET_KEY is required`.
 
 The superuser is treated as `Portal Admin` by the application.
 

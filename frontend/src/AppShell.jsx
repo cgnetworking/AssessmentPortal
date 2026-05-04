@@ -57,6 +57,8 @@ export function AppShell({
   onLogout,
   title,
   eyebrow,
+  authTitle,
+  authEyebrow,
   heroAction,
   heroClassName = "",
   contentClassName = "",
@@ -66,6 +68,18 @@ export function AppShell({
   const permissions = auth.user?.permissions || [];
   const canViewAuditLog = permissions.includes("viewAuditLog");
   const mainClassName = ["content", contentClassName].filter(Boolean).join(" ");
+
+  if (requireAuth && (auth.loading || !auth.authenticated)) {
+    return (
+      <AuthScreen
+        title={authTitle || title}
+        eyebrow={authEyebrow || eyebrow}
+        error={auth.error}
+        loginUrl={auth.loginUrl}
+        loading={auth.loading}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -100,40 +114,36 @@ export function AppShell({
         </aside>
 
         <main className={mainClassName} aria-label={title}>
-          {requireAuth && auth.loading ? (
-            <section className="login-panel">
-              <h1>{title}</h1>
+          {auth.error ? <div className="error-banner">{auth.error}</div> : null}
+          {title && requireAuth ? (
+            <section className={["hero", heroClassName].filter(Boolean).join(" ")}>
+              <div>
+                {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+                <h1>{title}</h1>
+              </div>
+              {heroAction ? <div className="hero-action">{heroAction}</div> : null}
             </section>
           ) : null}
-
-          {requireAuth && !auth.loading && !auth.authenticated ? (
-            <section className="login-panel">
-              {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-              <h1>{title}</h1>
-              {auth.error ? <div className="error-banner">{auth.error}</div> : null}
-              <button className="button primary" type="button" onClick={() => { window.location.href = auth.loginUrl; }}>
-                Sign in with Microsoft Entra ID
-              </button>
-            </section>
-          ) : null}
-
-          {!requireAuth || auth.authenticated ? (
-            <>
-              {auth.error ? <div className="error-banner">{auth.error}</div> : null}
-              {title && requireAuth ? (
-                <section className={["hero", heroClassName].filter(Boolean).join(" ")}>
-                  <div>
-                    {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-                    <h1>{title}</h1>
-                  </div>
-                  {heroAction ? <div className="hero-action">{heroAction}</div> : null}
-                </section>
-              ) : null}
-              {children}
-            </>
-          ) : null}
+          {children}
         </main>
       </div>
     </div>
+  );
+}
+
+function AuthScreen({ title, eyebrow, error, loginUrl, loading }) {
+  return (
+    <main className="auth-screen" aria-label={title}>
+      <section className="login-panel">
+        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+        <h1>{title}</h1>
+        {error ? <div className="error-banner">{error}</div> : null}
+        {!loading ? (
+          <button className="button primary" type="button" onClick={() => { window.location.href = loginUrl; }}>
+            Sign in with Microsoft Entra ID
+          </button>
+        ) : null}
+      </section>
+    </main>
   );
 }

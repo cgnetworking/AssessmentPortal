@@ -13,8 +13,8 @@ function HomeApp() {
       auth={auth}
       onLogout={logout}
       title="Home"
+      authTitle="Assessment Portal"
       contentClassName="blank-home"
-      requireAuth={false}
     />
   );
 }
