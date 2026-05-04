@@ -12,9 +12,18 @@ ensure_users_and_directories() {
     fi
 
     install -d -m 0755 -o root -g root "${INSTALL_DIR}" "${ENV_DIR}"
-    install -d -m 0750 -o "${APP_USER}" -g "${APP_GROUP}" "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
+    install -d -m 0750 -o "${APP_USER}" -g "${APP_GROUP}" \
+        "${DATA_DIR}" \
+        "${DATA_DIR}/assessment-work" \
+        "${DATA_DIR}/.cache" \
+        "${DATA_DIR}/.config" \
+        "${DATA_DIR}/.local" \
+        "${DATA_DIR}/.local/share" \
+        "${DATA_DIR}/.local/share/powershell" \
+        "${DATA_DIR}/.local/share/powershell/Scripts" \
+        "${DATA_DIR}/.local/share/powershell/Modules"
     chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
-    chmod 0750 "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
+    chmod 0750 "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache" "${DATA_DIR}/.config" "${DATA_DIR}/.local"
 }
 
 copy_application_files() {
@@ -52,7 +61,7 @@ lock_application_files() {
     find "${INSTALL_DIR}" -type f -perm /111 -exec chmod u=rwx,go=rx {} +
     find "${INSTALL_DIR}" -type f ! -perm /111 -exec chmod u=rw,go=r {} +
     chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
-    chmod 0750 "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache"
+    chmod 0750 "${DATA_DIR}" "${DATA_DIR}/assessment-work" "${DATA_DIR}/.cache" "${DATA_DIR}/.config" "${DATA_DIR}/.local"
 }
 
 validate_no_duckdb_files() {

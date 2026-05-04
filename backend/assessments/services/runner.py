@@ -27,6 +27,9 @@ POWERSHELL_INHERITED_ENV_VARS = {
     "TEMP",
     "TMP",
     "TMPDIR",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
     "ZTA_REQUIRED_MODULES_PATH",
 }
 
@@ -205,8 +208,19 @@ class PowerShellAssessmentRunner:
             for name in POWERSHELL_INHERITED_ENV_VARS
             if (value := os.environ.get(name))
         }
+        home = Path(env["HOME"]).resolve() if env.get("HOME") else Path(settings.ZTA_WORK_ROOT).resolve().parent
+        xdg_data_home = Path(env.get("XDG_DATA_HOME") or home / ".local" / "share")
+        xdg_config_home = Path(env.get("XDG_CONFIG_HOME") or home / ".config")
+        xdg_cache_home = Path(env.get("XDG_CACHE_HOME") or home / ".cache")
+        for path in (xdg_data_home, xdg_config_home, xdg_cache_home):
+            path.mkdir(parents=True, exist_ok=True)
+
         env.update(
             {
+                "HOME": str(home),
+                "XDG_DATA_HOME": str(xdg_data_home),
+                "XDG_CONFIG_HOME": str(xdg_config_home),
+                "XDG_CACHE_HOME": str(xdg_cache_home),
                 "PGHOST": settings.POSTGRES_HOST,
                 "PGDATABASE": settings.POSTGRES_DB,
                 "PGUSER": settings.POSTGRES_USER,

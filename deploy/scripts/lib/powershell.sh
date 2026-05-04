@@ -8,7 +8,12 @@ install_powershell_dependencies() {
     local module_root="${INSTALL_DIR}/modules/ZeroTrustAssessment"
 
     log "Installing pinned ZeroTrustAssessment PowerShell dependencies for the application user."
-    runuser -u "${APP_USER}" -- env HOME="${DATA_DIR}" pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "\$ErrorActionPreference = 'Stop'
+    runuser -u "${APP_USER}" -- env \
+        HOME="${DATA_DIR}" \
+        XDG_DATA_HOME="${DATA_DIR}/.local/share" \
+        XDG_CONFIG_HOME="${DATA_DIR}/.config" \
+        XDG_CACHE_HOME="${DATA_DIR}/.cache" \
+        pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "\$ErrorActionPreference = 'Stop'
 \$moduleRoot = '${module_root}'
 \$manifest = Join-Path \$moduleRoot 'ZeroTrustAssessment.psd1'
 \$requiredModulesPath = Join-Path \$env:HOME '.cache/ZeroTrustAssessment/Modules'

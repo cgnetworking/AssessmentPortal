@@ -10,6 +10,9 @@ Group=assessmentportal
 WorkingDirectory=/opt/assessmentportal/backend
 EnvironmentFile=/etc/assessmentportal/assessmentportal.env
 Environment=HOME=/var/lib/assessmentportal
+Environment=XDG_DATA_HOME=/var/lib/assessmentportal/.local/share
+Environment=XDG_CONFIG_HOME=/var/lib/assessmentportal/.config
+Environment=XDG_CACHE_HOME=/var/lib/assessmentportal/.cache
 ExecStart=/opt/assessmentportal/.venv/bin/python manage.py run_queued_assessments
 Restart=always
 RestartSec=10
