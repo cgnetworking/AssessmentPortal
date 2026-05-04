@@ -212,12 +212,18 @@ class PowerShellAssessmentRunner:
         xdg_data_home = Path(env.get("XDG_DATA_HOME") or home / ".local" / "share")
         xdg_config_home = Path(env.get("XDG_CONFIG_HOME") or home / ".config")
         xdg_cache_home = Path(env.get("XDG_CACHE_HOME") or home / ".cache")
-        for path in (xdg_data_home, xdg_config_home, xdg_cache_home):
+        powershell_scripts_path = xdg_data_home / "powershell" / "Scripts"
+        powershell_modules_path = xdg_data_home / "powershell" / "Modules"
+        for path in (xdg_data_home, xdg_config_home, xdg_cache_home, powershell_scripts_path, powershell_modules_path):
             path.mkdir(parents=True, exist_ok=True)
+        path_entries = [item for item in env.get("PATH", "").split(os.pathsep) if item]
+        if str(powershell_scripts_path) not in path_entries:
+            path_entries.insert(0, str(powershell_scripts_path))
 
         env.update(
             {
                 "HOME": str(home),
+                "PATH": os.pathsep.join(path_entries),
                 "XDG_DATA_HOME": str(xdg_data_home),
                 "XDG_CONFIG_HOME": str(xdg_config_home),
                 "XDG_CACHE_HOME": str(xdg_cache_home),

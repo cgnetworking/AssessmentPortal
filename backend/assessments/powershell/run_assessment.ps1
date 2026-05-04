@@ -185,19 +185,51 @@ function ConvertTo-ZtSharePointAdminUrl {
 }
 
 function Add-ZtRequiredModulesPath {
+    if (-not $env:HOME) {
+        throw 'HOME is required for PowerShell dependency paths.'
+    }
+
+    if (-not $env:XDG_DATA_HOME) {
+        $env:XDG_DATA_HOME = Join-Path $env:HOME '.local/share'
+    }
+    if (-not $env:XDG_CONFIG_HOME) {
+        $env:XDG_CONFIG_HOME = Join-Path $env:HOME '.config'
+    }
+    if (-not $env:XDG_CACHE_HOME) {
+        $env:XDG_CACHE_HOME = Join-Path $env:HOME '.cache'
+    }
+
+    $powerShellDataPath = Join-Path $env:XDG_DATA_HOME 'powershell'
+    $powerShellScriptsPath = Join-Path $powerShellDataPath 'Scripts'
+    $powerShellModulesPath = Join-Path $powerShellDataPath 'Modules'
+
+    foreach ($path in @($env:XDG_DATA_HOME, $env:XDG_CONFIG_HOME, $env:XDG_CACHE_HOME, $powerShellDataPath, $powerShellScriptsPath, $powerShellModulesPath)) {
+        if (-not (Test-Path -Path $path -PathType Container)) {
+            $null = New-Item -Path $path -ItemType Directory -Force -ErrorAction Stop
+        }
+    }
+
+    $pathEntries = @($env:PATH -split [System.IO.Path]::PathSeparator | Where-Object { $_ })
+    if ($powerShellScriptsPath -notin $pathEntries) {
+        $env:PATH = (@($powerShellScriptsPath) + $pathEntries) -join [System.IO.Path]::PathSeparator
+    }
+
     $requiredModulesPath = $env:ZTA_REQUIRED_MODULES_PATH
     if (-not $requiredModulesPath) {
-        if (-not $env:HOME) {
-            return
-        }
         $requiredModulesPath = Join-Path $env:HOME '.cache/ZeroTrustAssessment/Modules'
+    }
+    if (-not (Test-Path -Path $requiredModulesPath -PathType Container)) {
+        $null = New-Item -Path $requiredModulesPath -ItemType Directory -Force -ErrorAction Stop
     }
 
     $separator = [System.IO.Path]::PathSeparator
     $modulePath = @($env:PSModulePath -split $separator | Where-Object { $_ })
     $normalizedModulePath = $modulePath | ForEach-Object { $_.TrimEnd([System.IO.Path]::DirectorySeparatorChar) }
-    if ($requiredModulesPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar) -notin $normalizedModulePath) {
-        $env:PSModulePath = (@($requiredModulesPath) + $modulePath) -join $separator
+    $modulePathsToPrepend = @($requiredModulesPath, $powerShellModulesPath).Where({
+        $_.TrimEnd([System.IO.Path]::DirectorySeparatorChar) -notin $normalizedModulePath
+    })
+    if ($modulePathsToPrepend.Count -gt 0) {
+        $env:PSModulePath = ($modulePathsToPrepend + $modulePath) -join $separator
     }
 }
 

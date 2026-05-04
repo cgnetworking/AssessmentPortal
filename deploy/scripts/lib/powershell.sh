@@ -13,6 +13,7 @@ install_powershell_dependencies() {
         XDG_DATA_HOME="${DATA_DIR}/.local/share" \
         XDG_CONFIG_HOME="${DATA_DIR}/.config" \
         XDG_CACHE_HOME="${DATA_DIR}/.cache" \
+        PATH="${DATA_DIR}/.local/share/powershell/Scripts:${PATH}" \
         pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "\$ErrorActionPreference = 'Stop'
 \$moduleRoot = '${module_root}'
 \$manifest = Join-Path \$moduleRoot 'ZeroTrustAssessment.psd1'
