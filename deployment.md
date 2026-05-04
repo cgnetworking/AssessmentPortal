@@ -123,7 +123,7 @@ Check that unauthenticated requests are challenged:
 curl -i https://<host>/api/health/
 ```
 
-The expected response before sign-in is `401 Unauthorized`. Browser requests to the portal pages should redirect to Microsoft Entra sign-in before Nginx serves the frontend.
+The expected response before sign-in is `401 Unauthorized`. Browser requests to the portal pages should show the portal sign-in screen before any application chrome or data is displayed.
 
 Open the portal:
 

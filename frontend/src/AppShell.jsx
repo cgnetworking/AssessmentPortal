@@ -139,9 +139,14 @@ function AuthScreen({ title, eyebrow, error, loginUrl, loading }) {
         <h1>{title}</h1>
         {error ? <div className="error-banner">{error}</div> : null}
         {!loading ? (
-          <button className="button primary" type="button" onClick={() => { window.location.href = loginUrl; }}>
-            Sign in with Microsoft Entra ID
-          </button>
+          <div className="auth-actions">
+            <button className="button primary" type="button" onClick={() => { window.location.href = loginUrl; }}>
+              Sign in with Microsoft Entra ID
+            </button>
+            <a className="button" href="/admin/login/?next=/admin/">
+              Admin sign in
+            </a>
+          </div>
         ) : null}
       </section>
     </main>

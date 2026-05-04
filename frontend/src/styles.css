@@ -182,6 +182,12 @@ input {
   margin: 0 auto;
 }
 
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .login-panel h1 {
   max-width: 780px;
 }
@@ -229,6 +235,7 @@ h1 {
   font-weight: 700;
   cursor: default;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .button:disabled {
