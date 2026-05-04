@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-ZtCertificate {

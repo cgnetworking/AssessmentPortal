@@ -34,6 +34,28 @@ function Get-ZtRequiredModuleSpecByService {
     )
 
     begin {
+        function Get-ZtModuleSpecificationName {
+            param (
+                [Parameter(ValueFromPipeline = $true)]
+                [AllowNull()]
+                $ModuleSpecification
+            )
+
+            process {
+                if ($null -eq $ModuleSpecification) {
+                    return
+                }
+
+                $properties = $ModuleSpecification.PSObject.Properties
+                if ($properties['Name']) {
+                    return $ModuleSpecification.Name
+                }
+                if ($properties['ModuleName']) {
+                    return $ModuleSpecification.ModuleName
+                }
+            }
+        }
+
         $Service = $Service | Select-Object -Unique
         $ztModule = Get-ZtModule
         $moduleManifestFileName = '{0}.psd1' -f $ztModule.Name
@@ -43,6 +65,9 @@ function Get-ZtRequiredModuleSpecByService {
         [Microsoft.PowerShell.Commands.ModuleSpecification[]]$requiredModules = $moduleManifest.RequiredModules
         [Microsoft.PowerShell.Commands.ModuleSpecification[]]$XPlatPowerShellRequiredModules = $moduleManifest.PrivateData.XPlatPowerShellRequiredModules
         [Microsoft.PowerShell.Commands.ModuleSpecification[]]$windowsPowerShellRequiredModules = $moduleManifest.PrivateData.WindowsPowerShellRequiredModules
+        [string[]]$requiredModuleNames = @($requiredModules | Get-ZtModuleSpecificationName)
+        [string[]]$XPlatPowerShellRequiredModuleNames = @($XPlatPowerShellRequiredModules | Get-ZtModuleSpecificationName)
+        [string[]]$windowsPowerShellRequiredModuleNames = @($windowsPowerShellRequiredModules | Get-ZtModuleSpecificationName)
         # Order the selected services based on the order of the keys in the ServiceToRequiredModuleMap to ensure the module load and connection is done in the correct order.
         $Service = $Service | Sort-Object { [array]::IndexOf($moduleManifest.PrivateData.serviceConnectionOrder, $_) }
         $requiredModuleSpecsByService = [ordered]@{
@@ -56,25 +81,25 @@ function Get-ZtRequiredModuleSpecByService {
             foreach ($moduleName in $serviceToRequiredModuleMap[$serviceToCheck]) {
                 Write-Debug -Message ("Service '{0}' depends on module '{1}'." -f $serviceToCheck, $moduleName)
 
-                if ($moduleName -in $requiredModules.Name) {
+                if ($moduleName -in $requiredModuleNames) {
                     Write-Debug -Message ("Module '{0}' is listed in RequiredModules." -f $moduleName)
                     $requiredModuleSpecsByService[$serviceToCheck] += $requiredModules.Where({
-                        $_.Name -eq $moduleName -and $requiredModuleSpecsByService[$serviceToCheck] -notcontains $_
+                        ($_ | Get-ZtModuleSpecificationName) -eq $moduleName -and $requiredModuleSpecsByService[$serviceToCheck] -notcontains $_
                     })
                 }
-                elseif ($moduleName -in $XPlatPowerShellRequiredModules.Name) {
+                elseif ($moduleName -in $XPlatPowerShellRequiredModuleNames) {
                     Write-Debug -Message ("Module '{0}' is listed in XPlatPowerShellRequiredModules." -f $moduleName)
                     $requiredModuleSpecsByService[$serviceToCheck] += $XPlatPowerShellRequiredModules.Where({
-                        $_.Name -eq $moduleName -and $requiredModuleSpecsByService[$serviceToCheck] -notcontains $_
+                        ($_ | Get-ZtModuleSpecificationName) -eq $moduleName -and $requiredModuleSpecsByService[$serviceToCheck] -notcontains $_
                     })
                 }
-                elseif ($isWindows -and $moduleName -in $windowsPowerShellRequiredModules.Name) {
+                elseif ($isWindows -and $moduleName -in $windowsPowerShellRequiredModuleNames) {
                     Write-Debug -Message ("Module '{0}' is listed in WindowsPowerShellRequiredModules." -f $moduleName)
                     $requiredModuleSpecsByService[$serviceToCheck] += $windowsPowerShellRequiredModules.Where({
-                        $_.Name -eq $moduleName -and $requiredModuleSpecsByService[$serviceToCheck] -notcontains $_
+                        ($_ | Get-ZtModuleSpecificationName) -eq $moduleName -and $requiredModuleSpecsByService[$serviceToCheck] -notcontains $_
                     })
                 }
-                elseif (-not $IsWindows -and $moduleName -in $windowsPowerShellRequiredModules.Name) {
+                elseif (-not $IsWindows -and $moduleName -in $windowsPowerShellRequiredModuleNames) {
                     Write-Debug -Message ("Module '{0}' is listed in WindowsPowerShellRequiredModules but the current platform is not Windows." -f $moduleName)
                     # The module that this service depends on is not available. The service won't be available.
                     $requiredModuleSpecsByService['ServiceInvalidForOS'] += $serviceToCheck

@@ -63,6 +63,28 @@ function Initialize-Dependencies {
 
     Write-Verbose -Message "=== Initialize-Dependencies.ps1 Starting ==="
 
+    function Get-ZtModuleSpecificationName {
+        param (
+            [Parameter(ValueFromPipeline = $true)]
+            [AllowNull()]
+            $ModuleSpecification
+        )
+
+        process {
+            if ($null -eq $ModuleSpecification) {
+                return
+            }
+
+            $properties = $ModuleSpecification.PSObject.Properties
+            if ($properties['Name']) {
+                return $ModuleSpecification.Name
+            }
+            if ($properties['ModuleName']) {
+                return $ModuleSpecification.ModuleName
+            }
+        }
+    }
+
     #region Prepend $Env:PSModulePath with ~\AppData|.cache\ZeroTrustAssessment\Modules
     Write-Verbose -Message ("Setting $Env:PSModulePath to include the {0} for module dependencies..." -f $RequiredModulesPath)
     if (-not (Test-Path -Path $RequiredModulesPath -PathType Container))
@@ -103,14 +125,17 @@ function Initialize-Dependencies {
 
     #region Build list of RequiredModule based on OS
     [Microsoft.PowerShell.Commands.ModuleSpecification[]]$allModuleDependencies = $requiredModules + $xPlatPowerShellRequiredModules
+    [string[]]$allModuleDependencyNames = @($allModuleDependencies | Get-ZtModuleSpecificationName)
     if ($IsWindows) {
         $allModuleDependencies += $windowsPowerShellRequiredModules.Where({
-            $_.Name -notin $allModuleDependencies.Name
+            ($_ | Get-ZtModuleSpecificationName) -notin $allModuleDependencyNames
         })
+        [string[]]$allModuleDependencyNames = @($allModuleDependencies | Get-ZtModuleSpecificationName)
     }
 
+    [string[]]$externalModuleDependencyNames = @($externalModuleDependencies | Get-ZtModuleSpecificationName)
     [Microsoft.PowerShell.Commands.ModuleSpecification[]]$requiredModuleToSave = $allModuleDependencies.Where{
-        $_.Name -notin $externalModuleDependencies.Name
+        ($_ | Get-ZtModuleSpecificationName) -notin $externalModuleDependencyNames
     }
     #endregion
 
@@ -147,12 +172,13 @@ function Initialize-Dependencies {
 
         foreach ($moduleSpec in $requiredModuleToSave)
         {
-            Write-Verbose -Message ("Saving module {0} with version {1}..." -f $moduleSpec.Name, $moduleSpec.Version)
+            $moduleSpecName = $moduleSpec | Get-ZtModuleSpecificationName
+            Write-Verbose -Message ("Saving module {0} with version {1}..." -f $moduleSpecName, $moduleSpec.Version)
             $isModulePresent = Get-Module -FullyQualifiedName $moduleSpec -ListAvailable -ErrorAction Ignore
 
             if ($isModulePresent)
             {
-                Write-Host -Object ('    ✅ Module {0} found (v{1}).' -f $moduleSpec.Name,$isModulePresent[0].Version) -ForegroundColor Green
+                Write-Host -Object ('    ✅ Module {0} found (v{1}).' -f $moduleSpecName,$isModulePresent[0].Version) -ForegroundColor Green
                 continue
             }
 
@@ -162,7 +188,7 @@ function Initialize-Dependencies {
                 {
                     # To Save-PSResource we need to first Find-PSResource to get the latest available in given range.
                     $findModuleParams = @{
-                        Name = $moduleSpec.Name
+                        Name = $moduleSpecName
                         ErrorAction = 'Stop'
                         'Prerelease' = $AllowPrerelease.IsPresent
                     }
@@ -195,8 +221,8 @@ function Initialize-Dependencies {
                         TrustRepository = $true
                     }
 
-                    $savedModule = ($latestModuleInRange | Save-PSResource @savePSResourceParams).Where({ $_.Name -eq $moduleSpec.Name },1)
-                    Write-Host -Object ('    ⬇️ Module {0} v{1} saved successfully.' -f $moduleSpec.Name, $savedModule.Version) -ForegroundColor Green
+                    $savedModule = ($latestModuleInRange | Save-PSResource @savePSResourceParams).Where({ $_.Name -eq $moduleSpecName },1)
+                    Write-Host -Object ('    ⬇️ Module {0} v{1} saved successfully.' -f $moduleSpecName, $savedModule.Version) -ForegroundColor Green
                 }
                 elseif ($saveModuleCmd.Name -eq 'Save-Module')
                 {
@@ -211,12 +237,12 @@ function Initialize-Dependencies {
                         $saveModuleCmdParams['AllowPrerelease'] = $AllowPrerelease.IsPresent
                     }
                     $moduleSpec | &$saveModuleCmd @saveModuleCmdParams
-                    Write-Host -Object ('    ⬇️ Module {0} saved successfully.' -f $moduleSpec.Name) -ForegroundColor Green
+                    Write-Host -Object ('    ⬇️ Module {0} saved successfully.' -f $moduleSpecName) -ForegroundColor Green
                 }
             }
             catch
             {
-                Write-Host -Object ('    ❌ Failed to save module {0}: {1}' -f $moduleSpec.Name, $_) -ForegroundColor Red
+                Write-Host -Object ('    ❌ Failed to save module {0}: {1}' -f $moduleSpecName, $_) -ForegroundColor Red
             }
         }
     }
@@ -241,7 +267,7 @@ function Initialize-Dependencies {
             . $helperPath
             Write-Verbose -Message ('Module with DLLs to load: {0}' -f (([Microsoft.PowerShell.Commands.ModuleSpecification[]]$moduleManifest.RequiredModules).Name -join ', '))
             # This method does not necessarily load the right dll (it ignores the load logic from the modules)
-            $msalToLoadInOrder = Get-ModuleImportOrder -Name $allModuleDependencies.Name
+            $msalToLoadInOrder = Get-ModuleImportOrder -Name $allModuleDependencyNames
 
             $msalToLoadInOrder.ForEach{
                 Write-Verbose -Message ('Loading MSAL v{0} for dependency {1} version {2}' -f $_.DLLVersion, $_.Name, $_.ModuleVersion)
